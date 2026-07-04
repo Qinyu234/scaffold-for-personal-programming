@@ -178,7 +178,7 @@ function findCrossFileWriteSites(project, entryFile, varName) {
             const text = ref.getText();
             sites.push({
                 variableName: text === setter ? setter : varName,
-                file: filePath,
+                file: path.resolve(filePath),
                 line,
                 column: column - 1,
                 enclosingFunction: findEnclosingFunction(ref),

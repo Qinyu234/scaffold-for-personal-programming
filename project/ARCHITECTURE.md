@@ -2,7 +2,7 @@
 
 ## Active Scope / 活跃范围
 
-**EN:** **Core library** (`ingestion/`, `analysis/`, `projection/`, `virtual/` planned) + **VS Code extension** (`extension.ts`) + **CLI** (`cli.ts`).
+**EN:** **Core library** (`ingestion/`, `analysis/`, `projection/`, `virtual/`) + **VS Code extension** + **CLI**.
 
 **中文：** **核心库** + **VS Code 扩展** + **CLI**。
 
@@ -12,7 +12,7 @@ flowchart TD
         Ingestion --> Analysis
         Analysis --> LucidIR[Lucid IR]
         LucidIR --> Projection[projection/]
-        Projection --> Virtual[virtual/ planned]
+        Projection --> Virtual[virtual/]
     end
     subgraph shells [Shells]
         Extension[extension.ts]
@@ -33,7 +33,10 @@ flowchart TD
 | `ingestion/joern.ts` | Joern HTTP adapter (optional) | Joern 可选适配 |
 | `analysis/` | Contracts, triggers | 合约、触发 |
 | `core/` | `analyzeFile()` public API | 对外分析 API |
-| `projection/` | Filter+cut → Projection Slice | 切片 |
+| `analysis/data-type.ts` | `(length, interpretation)` for Data Flow View | Data Flow 类型 |
+| `projection/data-flow-slice.ts` | Python Data Flow filter+cut | Python 数据流切片 |
+| `projection/def-use-slice.ts` | Def-Use filter+cut | Def-Use 切片 |
+| `projection/entry-point-slice.ts` | JS/TS Entry Point call tree | Entry Point 切片 |
 | `virtual/` | pull/push/fork, translation scaffold | 同步、转换脚手架 |
 | `extension.ts` | VS Code commands, webview, providers | 扩展壳 |
 | `cli.ts` | Headless JSON output | CLI |

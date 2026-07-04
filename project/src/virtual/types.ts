@@ -9,6 +9,8 @@ export interface DocumentSegment {
   kind: string;
   sourceFile: string;
   sourceLine: number;
+  /** Inclusive end line in real source; defaults to sourceLine when omitted. */
+  sourceEndLine?: number;
   virtualStartLine: number;
   virtualEndLine: number;
   collapsed: boolean;
@@ -39,6 +41,8 @@ export interface VirtualSession {
   collapsedFunctions: Set<string>;
   selectedSegmentIds: Set<string>;
   lineage: Lineage;
+  /** Phase 2: runtime trace events merged into slice on pull/layout. */
+  traceEvents?: import('../analysis/trace-overlay').TraceEvent[];
 }
 
 export interface PushResult {

@@ -1,0 +1,1 @@
+{"version":3,"file":"lucid-paths.js","sourceRoot":"","sources":["../../src/extension/lucid-paths.ts"],"names":[],"mappings":";AAAA;;GAEG;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;AAMH,sCAEC;AAND,2CAA6B;AAEhB,QAAA,cAAc,GAAG,IAAI,CAAC,IAAI,CAAC,QAAQ,EAAE,YAAY,CAAC,CAAC;AAEhE,SAAgB,aAAa,CAAC,aAAqB;IACjD,OAAO,IAAI,CAAC,IAAI,CAAC,aAAa,EAAE,sBAAc,CAAC,CAAC;AAClD,CAAC"}

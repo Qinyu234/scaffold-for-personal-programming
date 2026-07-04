@@ -11,6 +11,12 @@ const contract_test_1 = require("./analysis/__tests__/contract.test");
 const cli_test_1 = require("./__tests__/cli.test");
 const projection_slice_test_1 = require("./projection/__tests__/projection-slice.test");
 const virtual_test_1 = require("./virtual/__tests__/virtual.test");
+const structure_slice_test_1 = require("./projection/__tests__/structure-slice.test");
+const impact_slice_test_1 = require("./projection/__tests__/impact-slice.test");
+const event_flow_slice_test_1 = require("./projection/__tests__/event-flow-slice.test");
+const entry_point_slice_test_1 = require("./projection/__tests__/entry-point-slice.test");
+const data_flow_slice_test_1 = require("./projection/__tests__/data-flow-slice.test");
+const phase2_ui_test_1 = require("./__tests__/phase2-ui.test");
 const phase2_test_1 = require("./__tests__/phase2.test");
 async function main() {
     console.log('==================================================');
@@ -25,7 +31,13 @@ async function main() {
         { name: 'CLI: Command & Trigger Analysis Tests', fn: cli_test_1.runTests },
         { name: 'Projection: Def-Use Slice Tests', fn: projection_slice_test_1.runTests },
         { name: 'Virtual: Layout Push Fork Tests', fn: virtual_test_1.runTests },
+        { name: 'Projection: Data Flow Slice Tests', fn: data_flow_slice_test_1.runTests },
+        { name: 'Projection: Entry Point Slice Tests', fn: entry_point_slice_test_1.runTests },
+        { name: 'Projection: Event Flow Slice Tests', fn: event_flow_slice_test_1.runTests },
+        { name: 'Projection: Impact Slice Tests', fn: impact_slice_test_1.runTests },
+        { name: 'Projection: Structure Slice Tests', fn: structure_slice_test_1.runTests },
         { name: 'Phase 2: Cross-File Trace Translation Tests', fn: phase2_test_1.runTests },
+        { name: 'Phase 2: Extension UI Wiring Tests', fn: phase2_ui_test_1.runTests },
     ];
     let allSuccess = true;
     const passedSuites = [];

@@ -2,7 +2,7 @@
  * push overlay — save_selected / save_all back to real source (single-file lines).
  */
 
-import { replaceSourceLine } from './extract';
+import { replaceSourceLine, replaceSourceRange } from './extract';
 import { parseSegmentContent } from './layout';
 import { DocumentSegment, PushResult, VirtualSession } from './types';
 
@@ -28,12 +28,18 @@ export function pushOverlay(
 
   for (const segment of toPush) {
     const content = parseSegmentContent(virtualText, segment);
-    if (!content || content.startsWith('// [collapsed]')) {
+    if (!content || content.startsWith('// [collapsed]') || content.startsWith('# [collapsed]')) {
       continue;
     }
-    replaceSourceLine(segment.sourceFile, segment.sourceLine, content);
+    const sourceEnd = segment.sourceEndLine ?? segment.sourceLine;
+    const newLines = content.split(/\r?\n/);
+    if (sourceEnd > segment.sourceLine) {
+      replaceSourceRange(segment.sourceFile, segment.sourceLine, sourceEnd, newLines);
+    } else {
+      replaceSourceLine(segment.sourceFile, segment.sourceLine, newLines[0] ?? content);
+    }
     files.add(segment.sourceFile);
-    updatedLines++;
+    updatedLines += newLines.length;
   }
 
   return {

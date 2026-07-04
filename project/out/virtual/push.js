@@ -24,12 +24,19 @@ function pushOverlay(session, virtualText, mode) {
     const files = new Set();
     for (const segment of toPush) {
         const content = (0, layout_1.parseSegmentContent)(virtualText, segment);
-        if (!content || content.startsWith('// [collapsed]')) {
+        if (!content || content.startsWith('// [collapsed]') || content.startsWith('# [collapsed]')) {
             continue;
         }
-        (0, extract_1.replaceSourceLine)(segment.sourceFile, segment.sourceLine, content);
+        const sourceEnd = segment.sourceEndLine ?? segment.sourceLine;
+        const newLines = content.split(/\r?\n/);
+        if (sourceEnd > segment.sourceLine) {
+            (0, extract_1.replaceSourceRange)(segment.sourceFile, segment.sourceLine, sourceEnd, newLines);
+        }
+        else {
+            (0, extract_1.replaceSourceLine)(segment.sourceFile, segment.sourceLine, newLines[0] ?? content);
+        }
         files.add(segment.sourceFile);
-        updatedLines++;
+        updatedLines += newLines.length;
     }
     return {
         updatedFiles: [...files],

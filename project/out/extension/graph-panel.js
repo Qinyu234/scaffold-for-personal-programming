@@ -92,7 +92,7 @@ const cy = cytoscape({
     { selector: 'node', style: { label: 'data(label)', 'text-valign':'center', 'background-color':'#4a9eff', color:'#fff', 'font-size':10 } },
     { selector: 'edge', style: { label: 'data(label)', 'curve-style':'bezier', 'target-arrow-shape':'triangle', width:1 } },
   ],
-  layout: { name: 'breadthfirst', directed: true, padding: 20 },
+  layout: { name: spec.layout || 'breadthfirst', directed: true, padding: 20 },
 });
 let selectedNode = null;
 cy.on('tap', 'node', e => { selectedNode = e.target.id(); vscode.postMessage({ type:'nodeSelected', nodeId: selectedNode }); });

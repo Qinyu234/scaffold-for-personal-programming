@@ -4,11 +4,26 @@
 
 import { Contract } from '../analysis/contract';
 import { contractToSpans, ProjectionSlice } from './def-use-slice';
+import {
+  DataFlowSlice,
+  dataNodeId,
+  dataTypeNodeId,
+  spanNodeId,
+} from './data-flow-slice';
+import { EntryPointSlice, functionNodeId } from './entry-point-slice';
+import {
+  EventFlowSlice,
+  siteNodeId,
+  stateNodeId,
+  triggerNodeId,
+} from './event-flow-slice';
+import { ImpactSlice, impactSiteNodeId, impactStateNodeId } from './impact-slice';
+import { StructureSlice, depNodeId, moduleNodeId } from './structure-slice';
 
 export interface GraphNode {
   id: string;
   label: string;
-  kind: 'state' | 'write' | 'use' | 'trigger' | 'function' | 'module' | 'data';
+  kind: 'state' | 'write' | 'use' | 'trigger' | 'function' | 'module' | 'data' | 'import';
 }
 
 export interface GraphEdge {
@@ -23,6 +38,175 @@ export interface GraphSpec {
   scopeId: string;
   nodes: GraphNode[];
   edges: GraphEdge[];
+  layout?: 'breadthfirst' | 'dagre';
+}
+
+export function graphFromEntryPointSlice(slice: EntryPointSlice): GraphSpec {
+  const nodes: GraphNode[] = [];
+  const edges: GraphEdge[] = [];
+
+  for (const name of slice.callOrder) {
+    nodes.push({
+      id: functionNodeId(name),
+      label: name === slice.entryFunction ? `${name} (entry)` : name,
+      kind: 'function',
+    });
+  }
+
+  for (const edge of slice.edges) {
+    edges.push({
+      id: `e:${edge.caller}:${edge.callee}:${edge.callLine}`,
+      source: functionNodeId(edge.caller),
+      target: functionNodeId(edge.callee),
+      label: 'calls',
+    });
+  }
+
+  return {
+    viewType: 'entry-point',
+    scopeId: slice.scopeId,
+    nodes,
+    edges,
+    layout: 'breadthfirst',
+  };
+}
+
+export function graphFromEventFlowSlice(slice: EventFlowSlice): GraphSpec {
+  const nodes: GraphNode[] = [];
+  const edges: GraphEdge[] = [];
+  const stId = stateNodeId(slice.stateName);
+
+  nodes.push({ id: stId, label: slice.stateName, kind: 'state' });
+
+  for (const span of slice.spans) {
+    if (span.kind === 'define') {
+      continue;
+    }
+    const nodeId =
+      span.kind === 'trigger' ? triggerNodeId(span) : siteNodeId(span);
+    if (!nodes.find(n => n.id === nodeId)) {
+      const label =
+        span.kind === 'trigger'
+          ? `${span.event ?? 'event'} L${span.line}`
+          : `${span.kind} L${span.line}`;
+      nodes.push({
+        id: nodeId,
+        label,
+        kind: span.kind === 'trigger' ? 'trigger' : span.kind,
+      });
+    }
+  }
+
+  for (const edge of slice.edges) {
+    edges.push({
+      id: `e:${edge.source}:${edge.target}`,
+      source: edge.source,
+      target: edge.target,
+      label: edge.label,
+    });
+  }
+
+  return {
+    viewType: 'event-flow',
+    scopeId: slice.scopeId,
+    nodes,
+    edges,
+    layout: 'breadthfirst',
+  };
+}
+
+export function graphFromImpactSlice(slice: ImpactSlice): GraphSpec {
+  const nodes: GraphNode[] = [];
+  const edges: GraphEdge[] = [];
+  const stId = impactStateNodeId(slice.stateName);
+  nodes.push({ id: stId, label: slice.stateName, kind: 'state' });
+
+  for (const span of slice.spans) {
+    if (span.kind === 'define') {
+      continue;
+    }
+    const nodeId = impactSiteNodeId(span);
+    if (!nodes.find(n => n.id === nodeId)) {
+      nodes.push({
+        id: nodeId,
+        label: `${span.kind} L${span.line}`,
+        kind: span.kind === 'import' ? 'import' : span.kind,
+      });
+    }
+  }
+
+  for (const edge of slice.edges) {
+    edges.push({
+      id: `e:${edge.source}:${edge.target}`,
+      source: edge.source,
+      target: edge.target,
+      label: edge.label,
+    });
+  }
+
+  return { viewType: 'impact', scopeId: slice.scopeId, nodes, edges, layout: 'breadthfirst' };
+}
+
+export function graphFromStructureSlice(slice: StructureSlice): GraphSpec {
+  const nodes: GraphNode[] = [];
+  const edges: GraphEdge[] = [];
+  const modId = moduleNodeId(slice.moduleName);
+  nodes.push({ id: modId, label: slice.moduleName, kind: 'module' });
+
+  for (const span of slice.spans) {
+    const dep = depNodeId(span.variableName ?? 'unknown');
+    if (!nodes.find(n => n.id === dep)) {
+      nodes.push({ id: dep, label: span.variableName ?? 'dep', kind: 'module' });
+    }
+  }
+
+  for (const edge of slice.edges) {
+    edges.push({
+      id: `e:${edge.source}:${edge.target}`,
+      source: edge.source,
+      target: edge.target,
+      label: edge.label,
+    });
+  }
+
+  return { viewType: 'structure', scopeId: slice.scopeId, nodes, edges, layout: 'breadthfirst' };
+}
+
+export function graphFromDataFlowSlice(slice: DataFlowSlice): GraphSpec {
+  const nodes: GraphNode[] = [];
+  const edges: GraphEdge[] = [];
+  const typeId = dataTypeNodeId(slice.dataType);
+  const dataId = dataNodeId(slice.scopeId);
+
+  nodes.push({
+    id: typeId,
+    label: `${slice.dataType.label} (${slice.dataType.length})`,
+    kind: 'data',
+  });
+  nodes.push({ id: dataId, label: slice.scopeId, kind: 'data' });
+  edges.push({ id: `e:${typeId}:${dataId}`, source: typeId, target: dataId, label: 'interpret' });
+
+  for (const span of slice.spans) {
+    const nodeId = spanNodeId(span);
+    if (!nodes.find(n => n.id === nodeId)) {
+      nodes.push({
+        id: nodeId,
+        label: `${span.kind} L${span.line}`,
+        kind: span.kind === 'write' ? 'write' : span.kind === 'use' ? 'use' : 'state',
+      });
+    }
+    const edgeLabel = span.kind === 'write' ? 'mutate' : span.kind === 'use' ? 'read' : 'define';
+    const source = span.kind === 'write' ? nodeId : dataId;
+    const target = span.kind === 'write' ? dataId : nodeId;
+    edges.push({
+      id: `e:${source}:${target}:${span.kind}`,
+      source,
+      target,
+      label: edgeLabel,
+    });
+  }
+
+  return { viewType: 'data-flow', scopeId: slice.scopeId, nodes, edges };
 }
 
 export function graphFromDefUseSlice(slice: ProjectionSlice): GraphSpec {

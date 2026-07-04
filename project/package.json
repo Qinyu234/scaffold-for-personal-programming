@@ -14,6 +14,13 @@
   },
   "activationEvents": [
     "onCommand:lucid.openDefUse",
+    "onCommand:lucid.openEntryPoint",
+    "onCommand:lucid.openEventFlow",
+    "onCommand:lucid.openImpact",
+    "onCommand:lucid.openStructure",
+    "onCommand:lucid.openTranslation",
+    "onCommand:lucid.loadTraceOverlay",
+    "onCommand:lucid.openDataFlow",
     "onCommand:lucid.analyzeState",
     "onCommand:lucid.openView",
     "onCommand:lucid.saveSelected",
@@ -26,6 +33,13 @@
   "contributes": {
     "commands": [
       { "command": "lucid.openDefUse", "title": "Lucid: Open Def-Use View" },
+      { "command": "lucid.openDataFlow", "title": "Lucid: Open Data Flow View (Python)" },
+      { "command": "lucid.openEntryPoint", "title": "Lucid: Open Entry Point View (JS/TS)" },
+      { "command": "lucid.openEventFlow", "title": "Lucid: Open Event Flow View (JS/TS)" },
+      { "command": "lucid.openImpact", "title": "Lucid: Open Impact View" },
+      { "command": "lucid.openStructure", "title": "Lucid: Open Structure View" },
+      { "command": "lucid.openTranslation", "title": "Lucid: Open Translation (Python→C++)" },
+      { "command": "lucid.loadTraceOverlay", "title": "Lucid: Load Trace Overlay (JSON)" },
       { "command": "lucid.analyzeState", "title": "Lucid: Analyze State (alias)" },
       { "command": "lucid.openView", "title": "Lucid: Open View…" },
       { "command": "lucid.saveSelected", "title": "Lucid: Save Selected" },

@@ -10,6 +10,12 @@ import { runTests as runContractTests } from './analysis/__tests__/contract.test
 import { runTests as runCliTests } from './__tests__/cli.test';
 import { runTests as runProjectionSliceTests } from './projection/__tests__/projection-slice.test';
 import { runTests as runVirtualTests } from './virtual/__tests__/virtual.test';
+import { runTests as runStructureTests } from './projection/__tests__/structure-slice.test';
+import { runTests as runImpactTests } from './projection/__tests__/impact-slice.test';
+import { runTests as runEventFlowTests } from './projection/__tests__/event-flow-slice.test';
+import { runTests as runEntryPointTests } from './projection/__tests__/entry-point-slice.test';
+import { runTests as runDataFlowTests } from './projection/__tests__/data-flow-slice.test';
+import { runTests as runPhase2UiTests } from './__tests__/phase2-ui.test';
 import { runTests as runPhase2Tests } from './__tests__/phase2.test';
 
 async function main() {
@@ -26,7 +32,13 @@ async function main() {
     { name: 'CLI: Command & Trigger Analysis Tests', fn: runCliTests },
     { name: 'Projection: Def-Use Slice Tests', fn: runProjectionSliceTests },
     { name: 'Virtual: Layout Push Fork Tests', fn: runVirtualTests },
+    { name: 'Projection: Data Flow Slice Tests', fn: runDataFlowTests },
+    { name: 'Projection: Entry Point Slice Tests', fn: runEntryPointTests },
+    { name: 'Projection: Event Flow Slice Tests', fn: runEventFlowTests },
+    { name: 'Projection: Impact Slice Tests', fn: runImpactTests },
+    { name: 'Projection: Structure Slice Tests', fn: runStructureTests },
     { name: 'Phase 2: Cross-File Trace Translation Tests', fn: runPhase2Tests },
+    { name: 'Phase 2: Extension UI Wiring Tests', fn: runPhase2UiTests },
   ];
 
   let allSuccess = true;

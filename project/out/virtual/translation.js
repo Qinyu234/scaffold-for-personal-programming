@@ -44,6 +44,20 @@ const uri_1 = require("./uri");
 function readFileText(filePath) {
     return fs.readFileSync(filePath, 'utf8');
 }
+function placeholderSafeCppFromRust(source, scopeId) {
+    const lines = [
+        `// Lucid translation (scaffold): Rust-flavored *safe* C++`,
+        `// scope: ${scopeId}`,
+        `// DESIGN: not modern Rust→C++ — restricted "safe C++" dialect (RAII, no raw owning pointers).`,
+        `// Target: early-Rust-style subset OR project-specific #pragma lucid_safe rules.`,
+        '',
+        '#pragma once',
+        '// TODO: map ownership/borrow checks to explicit safe wrappers',
+        `// --- source excerpt ---`,
+        ...source.split(/\r?\n/).slice(0, 40).map(l => `// ${l}`),
+    ];
+    return lines.join('\n');
+}
 function placeholderCppFromPython(source, scopeId) {
     const lines = [
         `// Lucid translation (scaffold): Python → C++`,
@@ -58,9 +72,17 @@ function placeholderCppFromPython(source, scopeId) {
 }
 function buildTranslationDocument(req) {
     const source = readFileText(req.sourceFile);
-    const text = req.targetLang === 'cpp'
-        ? placeholderCppFromPython(source, req.scopeId)
-        : `// unsupported target: ${req.targetLang}`;
+    const sourceLang = req.sourceLang ?? (req.sourceFile.endsWith('.rs') ? 'rust' : 'python');
+    let text;
+    if (req.targetLang === 'safe-cpp-rust' || sourceLang === 'rust') {
+        text = placeholderSafeCppFromRust(source, req.scopeId);
+    }
+    else if (req.targetLang === 'cpp') {
+        text = placeholderCppFromPython(source, req.scopeId);
+    }
+    else {
+        text = `// unsupported target: ${req.targetLang}`;
+    }
     return {
         text,
         segments: [

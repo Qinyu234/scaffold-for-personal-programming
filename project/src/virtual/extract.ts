@@ -28,3 +28,18 @@ export function replaceSourceLine(filePath: string, lineNumber: number, newConte
   lines[lineNumber - 1] = newContent;
   writeSourceLines(filePath, lines);
 }
+
+export function replaceSourceRange(
+  filePath: string,
+  startLine: number,
+  endLine: number,
+  newLines: string[],
+): void {
+  const lines = readSourceLines(filePath);
+  if (startLine < 1 || endLine < startLine || startLine > lines.length) {
+    return;
+  }
+  const end = Math.min(endLine, lines.length);
+  lines.splice(startLine - 1, end - startLine + 1, ...newLines);
+  writeSourceLines(filePath, lines);
+}

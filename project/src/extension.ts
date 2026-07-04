@@ -3,10 +3,23 @@
  */
 
 import * as vscode from 'vscode';
+import { detectLanguage, isSupportedSourceFile } from './ingestion/language';
+import * as fs from 'fs';
 import * as path from 'path';
 import { analyzeFile } from './core/analyze';
-import { graphFromDefUseSlice, VIEW_GRAPH_BUILDERS } from './projection/graph';
-import { createDefUseSession, pullSession, toggleFunctionFold } from './virtual/session';
+import { graphFromDefUseSlice, graphFromDataFlowSlice, graphFromEntryPointSlice, graphFromEventFlowSlice, graphFromImpactSlice, graphFromStructureSlice, VIEW_GRAPH_BUILDERS } from './projection/graph';
+import { createDataFlowSession, createDefUseSession, createEntryPointSession, createEventFlowSession, createImpactSession, createStructureSession, pullSession, toggleFunctionFold } from './virtual/session';
+import { listPythonDataNames } from './projection/data-flow-slice';
+import { listEntryPointFunctions } from './projection/entry-point-slice';
+import { listEventFlowStates } from './projection/event-flow-slice';
+import { listImpactStates } from './projection/impact-slice';
+import { createTranslationSession } from './virtual/translation';
+import { parseTraceEventsJson } from './virtual/trace-session';
+import { applyTraceToSession } from './virtual/trace-apply';
+import { traceJsonPath } from './extension/lucid-paths';
+import { syncTraceJsonWatch, disposeTraceJsonWatch } from './extension/trace-watch';
+import { setOnSessionsChanged } from './extension/session-store';
+import { syncLucidFileWatch, disposeLucidFileWatch, notifySourceChanged } from './extension/file-watch';
 import { pushOverlay, selectSegmentForFunction } from './virtual/push';
 import { forkFunctionInFile, forkFileInDirectory, forkPythonFileCopy, suggestForkName } from './virtual/fork';
 import { saveFoldState } from './virtual/fold-store';
@@ -25,6 +38,53 @@ let activeUri: string | undefined;
 
 function workspaceRoot(): string {
   return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+}
+
+function graphSpecForSession(session: import('./virtual/types').VirtualSession) {
+  switch (session.viewType) {
+    case 'def-use':
+      return graphFromDefUseSlice(session.slice);
+    case 'data-flow':
+      return graphFromDataFlowSlice(session.slice as import('./projection/data-flow-slice').DataFlowSlice);
+    case 'entry-point':
+      return graphFromEntryPointSlice(session.slice as import('./projection/entry-point-slice').EntryPointSlice);
+    case 'event-flow':
+      return graphFromEventFlowSlice(session.slice as import('./projection/event-flow-slice').EventFlowSlice);
+    case 'impact':
+      return graphFromImpactSlice(session.slice as import('./projection/impact-slice').ImpactSlice);
+    case 'structure':
+      return graphFromStructureSlice(session.slice as import('./projection/structure-slice').StructureSlice);
+    default:
+      return undefined;
+  }
+}
+
+function refreshGraphForActiveSession(): void {
+  const uri = activeUri;
+  if (!uri) {
+    return;
+  }
+  const session = getSession(uri);
+  if (!session) {
+    return;
+  }
+  const spec = graphSpecForSession(session);
+  if (spec) {
+    GraphPanel.show(extContext, spec, handleGraphMessage(uri));
+  }
+}
+
+async function mergeTraceIntoActiveSession(events: import('./analysis/trace-overlay').TraceEvent[]): Promise<number> {
+  const uri = activeUri;
+  const session = uri ? getSession(uri) : undefined;
+  if (!session) {
+    return 0;
+  }
+  const updated = applyTraceToSession(session, events, workspaceRoot());
+  putSession(updated);
+  refreshGraphForActiveSession();
+  await openVirtualDocument(uri!);
+  return events.length;
 }
 
 async function openVirtualDocument(uri: string): Promise<void> {
@@ -101,6 +161,84 @@ async function runFork(uri: string): Promise<void> {
   }
 }
 
+async function startTranslation(filePath: string, scopeId: string): Promise<void> {
+  const session = createTranslationSession(
+    { sourceFile: filePath, scopeId, targetLang: 'cpp' },
+    workspaceRoot(),
+  );
+  const uri = putSession(session);
+  activeUri = uri;
+  await openVirtualDocument(uri);
+  void vscode.window.showInformationMessage(
+    'Lucid: translation scaffold (Python→C++). Source untouched until you copy/push manually.',
+  );
+}
+
+async function startStructure(filePath: string): Promise<void> {
+  const session = createStructureSession(filePath, workspaceRoot());
+  if (!session) {
+    void vscode.window.showWarningMessage('Lucid: no structure slice for this file.');
+    return;
+  }
+  const uri = putSession(session);
+  activeUri = uri;
+  const spec = graphFromStructureSlice(session.slice as import('./projection/structure-slice').StructureSlice);
+  GraphPanel.show(extContext, spec, handleGraphMessage(uri));
+  await openVirtualDocument(uri);
+}
+
+async function startImpact(filePath: string, stateName: string): Promise<void> {
+  const session = createImpactSession(filePath, stateName, workspaceRoot());
+  if (!session) {
+    void vscode.window.showWarningMessage(`Lucid: no impact slice for "${stateName}".`);
+    return;
+  }
+  const uri = putSession(session);
+  activeUri = uri;
+  const spec = graphFromImpactSlice(session.slice as import('./projection/impact-slice').ImpactSlice);
+  GraphPanel.show(extContext, spec, handleGraphMessage(uri));
+  await openVirtualDocument(uri);
+}
+
+async function startEventFlow(filePath: string, stateName: string): Promise<void> {
+  const session = createEventFlowSession(filePath, stateName, workspaceRoot());
+  if (!session) {
+    void vscode.window.showWarningMessage(`Lucid: no event-flow slice for "${stateName}".`);
+    return;
+  }
+  const uri = putSession(session);
+  activeUri = uri;
+  const spec = graphFromEventFlowSlice(session.slice as import('./projection/event-flow-slice').EventFlowSlice);
+  GraphPanel.show(extContext, spec, handleGraphMessage(uri));
+  await openVirtualDocument(uri);
+}
+
+async function startEntryPoint(filePath: string, entryName: string): Promise<void> {
+  const session = createEntryPointSession(filePath, entryName, workspaceRoot());
+  if (!session) {
+    void vscode.window.showWarningMessage(`Lucid: no entry-point slice for "${entryName}".`);
+    return;
+  }
+  const uri = putSession(session);
+  activeUri = uri;
+  const spec = graphFromEntryPointSlice(session.slice as import('./projection/entry-point-slice').EntryPointSlice);
+  GraphPanel.show(extContext, spec, handleGraphMessage(uri));
+  await openVirtualDocument(uri);
+}
+
+async function startDataFlow(filePath: string, dataName: string): Promise<void> {
+  const session = createDataFlowSession(filePath, dataName, workspaceRoot());
+  if (!session) {
+    void vscode.window.showWarningMessage(`Lucid: no data-flow slice for "${dataName}".`);
+    return;
+  }
+  const uri = putSession(session);
+  activeUri = uri;
+  const spec = graphFromDataFlowSlice(session.slice as import('./projection/data-flow-slice').DataFlowSlice);
+  GraphPanel.show(extContext, spec, handleGraphMessage(uri));
+  await openVirtualDocument(uri);
+}
+
 async function startDefUse(filePath: string, stateName: string): Promise<void> {
   const session = createDefUseSession(filePath, stateName, workspaceRoot());
   if (!session) {
@@ -116,6 +254,22 @@ async function startDefUse(filePath: string, stateName: string): Promise<void> {
 
 export function activate(context: vscode.ExtensionContext): void {
   extContext = context;
+  const root = workspaceRoot();
+  setOnSessionsChanged(() => syncLucidFileWatch(notifySourceChanged));
+  syncTraceJsonWatch(root, ({ eventCount, sessionCount }) => {
+    if (sessionCount > 0) {
+      refreshGraphForActiveSession();
+      void vscode.window.showInformationMessage(
+        `Lucid: auto-loaded ${eventCount} trace event(s) from .lucid/trace.json (${sessionCount} session(s)).`,
+      );
+    }
+  });
+  context.subscriptions.push({
+    dispose: () => {
+      disposeLucidFileWatch();
+      disposeTraceJsonWatch();
+    },
+  });
   const fsProvider = new LucidFileSystemProvider();
   context.subscriptions.push(
     vscode.workspace.registerFileSystemProvider('lucid', fsProvider, { isCaseSensitive: true }),
@@ -141,6 +295,162 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     }),
 
+    vscode.commands.registerCommand('lucid.openEventFlow', async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) {
+        void vscode.window.showWarningMessage('Lucid: no active editor.');
+        return;
+      }
+      const filePath = editor.document.uri.fsPath;
+      if (detectLanguage(filePath) !== 'typescript') {
+        void vscode.window.showWarningMessage('Lucid: Event Flow View requires a JS/TS file.');
+        return;
+      }
+      const names = listEventFlowStates(filePath);
+      if (names.length === 0) {
+        void vscode.window.showInformationMessage('Lucid: no state variables found.');
+        return;
+      }
+      const stateName = await vscode.window.showQuickPick(names, { title: 'Select state (scopeId)' });
+      if (stateName) {
+        await startEventFlow(filePath, stateName);
+      }
+    }),
+
+    vscode.commands.registerCommand('lucid.openEntryPoint', async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) {
+        void vscode.window.showWarningMessage('Lucid: no active editor.');
+        return;
+      }
+      const filePath = editor.document.uri.fsPath;
+      if (detectLanguage(filePath) !== 'typescript') {
+        void vscode.window.showWarningMessage('Lucid: Entry Point View requires a JS/TS file.');
+        return;
+      }
+      const names = listEntryPointFunctions(filePath);
+      if (names.length === 0) {
+        void vscode.window.showInformationMessage('Lucid: no functions found.');
+        return;
+      }
+      const entryName = await vscode.window.showQuickPick(names, { title: 'Select entry function (scopeId)' });
+      if (entryName) {
+        await startEntryPoint(filePath, entryName);
+      }
+    }),
+
+    vscode.commands.registerCommand('lucid.openDataFlow', async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) {
+        void vscode.window.showWarningMessage('Lucid: no active editor.');
+        return;
+      }
+      const filePath = editor.document.uri.fsPath;
+      if (detectLanguage(filePath) !== 'python') {
+        void vscode.window.showWarningMessage('Lucid: Data Flow View requires a Python file (DESIGN Phase 1).');
+        return;
+      }
+      const names = listPythonDataNames(filePath);
+      if (names.length === 0) {
+        void vscode.window.showInformationMessage('Lucid: no data variables found.');
+        return;
+      }
+      const dataName = await vscode.window.showQuickPick(names, { title: 'Select data (scopeId)' });
+      if (dataName) {
+        await startDataFlow(filePath, dataName);
+      }
+    }),
+
+    vscode.commands.registerCommand('lucid.loadTraceOverlay', async () => {
+      const uri = activeUri;
+      const session = uri ? getSession(uri) : undefined;
+      if (!session) {
+        void vscode.window.showWarningMessage('Lucid: open a Virtual File session first.');
+        return;
+      }
+      const defaultPath = traceJsonPath(workspaceRoot());
+      let text: string | undefined;
+      if (fs.existsSync(defaultPath)) {
+        text = fs.readFileSync(defaultPath, 'utf8');
+      } else {
+        const picks = await vscode.window.showOpenDialog({
+          canSelectMany: false,
+          filters: { JSON: ['json'] },
+          title: 'Select trace events JSON (default: .lucid/trace.json)',
+        });
+        if (!picks?.[0]) {
+          return;
+        }
+        text = fs.readFileSync(picks[0].fsPath, 'utf8');
+      }
+      try {
+        const events = parseTraceEventsJson(text);
+        const count = await mergeTraceIntoActiveSession(events);
+        void vscode.window.showInformationMessage(`Lucid: merged ${count} trace event(s).`);
+      } catch (e) {
+        void vscode.window.showErrorMessage(`Lucid: trace load failed — ${e}`);
+      }
+    }),
+
+    vscode.commands.registerCommand('lucid.openTranslation', async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) {
+        void vscode.window.showWarningMessage('Lucid: no active editor.');
+        return;
+      }
+      const filePath = editor.document.uri.fsPath;
+      if (detectLanguage(filePath) !== 'python') {
+        void vscode.window.showWarningMessage('Lucid: Translation requires a Python file (Phase 2).');
+        return;
+      }
+      const names = listPythonDataNames(filePath);
+      if (names.length === 0) {
+        void vscode.window.showInformationMessage('Lucid: no Python variables found.');
+        return;
+      }
+      const scopeId = await vscode.window.showQuickPick(names, { title: 'Translation scopeId' });
+      if (scopeId) {
+        await startTranslation(filePath, scopeId);
+      }
+    }),
+
+    vscode.commands.registerCommand('lucid.openStructure', async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) {
+        void vscode.window.showWarningMessage('Lucid: no active editor.');
+        return;
+      }
+      const filePath = editor.document.uri.fsPath;
+      if (!isSupportedSourceFile(filePath)) {
+        void vscode.window.showWarningMessage('Lucid: Structure View requires a supported source file.');
+        return;
+      }
+      await startStructure(filePath);
+    }),
+
+    vscode.commands.registerCommand('lucid.openImpact', async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) {
+        void vscode.window.showWarningMessage('Lucid: no active editor.');
+        return;
+      }
+      const filePath = editor.document.uri.fsPath;
+      const lang = detectLanguage(filePath);
+      if (lang !== 'typescript' && lang !== 'python') {
+        void vscode.window.showWarningMessage('Lucid: Impact View requires JS/TS or Python.');
+        return;
+      }
+      const names = listImpactStates(filePath);
+      if (names.length === 0) {
+        void vscode.window.showInformationMessage('Lucid: no state variables found.');
+        return;
+      }
+      const stateName = await vscode.window.showQuickPick(names, { title: 'Select state (scopeId)' });
+      if (stateName) {
+        await startImpact(filePath, stateName);
+      }
+    }),
+
     vscode.commands.registerCommand('lucid.analyzeState', () => vscode.commands.executeCommand('lucid.openDefUse')),
 
     vscode.commands.registerCommand('lucid.openView', async () => {
@@ -153,6 +463,26 @@ export function activate(context: vscode.ExtensionContext): void {
       }
       if (viewType === 'def-use') {
         await vscode.commands.executeCommand('lucid.openDefUse');
+        return;
+      }
+      if (viewType === 'data-flow') {
+        await vscode.commands.executeCommand('lucid.openDataFlow');
+        return;
+      }
+      if (viewType === 'entry-point') {
+        await vscode.commands.executeCommand('lucid.openEntryPoint');
+        return;
+      }
+      if (viewType === 'event-flow') {
+        await vscode.commands.executeCommand('lucid.openEventFlow');
+        return;
+      }
+      if (viewType === 'impact') {
+        await vscode.commands.executeCommand('lucid.openImpact');
+        return;
+      }
+      if (viewType === 'structure') {
+        await vscode.commands.executeCommand('lucid.openStructure');
         return;
       }
       const scopeId = await vscode.window.showInputBox({ title: 'scopeId' });
@@ -270,4 +600,7 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 }
 
-export function deactivate(): void {}
+export function deactivate(): void {
+  disposeLucidFileWatch();
+  disposeTraceJsonWatch();
+}

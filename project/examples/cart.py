@@ -1,4 +1,4 @@
-cart_total = 0
+cart_total: int = 0
 
 def add_item(price):
     global cart_total

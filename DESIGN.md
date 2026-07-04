@@ -12,6 +12,63 @@
 
 See `LANGUAGE.md` for doc language policy. / 文档语言规范见 `LANGUAGE.md`。
 
+### Implementation Status / 实现状态（synced **20260703**）
+
+**EN:** Phase 0 **done**. Phase 1 **in progress** — four Views E2E (Def-Use, Entry Point, Event Flow, Data Flow).
+
+**中文：** Phase 0 **已完成**。Phase 1 **进行中**——四个 View 已 E2E（Def-Use、Entry Point、Event Flow、Data Flow）。
+
+| View | Language | E2E (graph + VF + push) | Notes |
+| --- | --- | --- | --- |
+| **Def-Use** | JS/TS | **Yes** | `lucid.openDefUse` |
+| **Data Flow** | Python | **Yes** | `lucid.openDataFlow` |
+| **Entry Point** | JS/TS | **Yes** | `lucid.openEntryPoint` |
+| **Event Flow** | JS/TS | **Yes** | `lucid.openEventFlow`; scopeId = state; static triggers |
+**EN:** Phase 0 **done**. **Phase 1 Views complete** — all six Views E2E.
+
+**中文：** Phase 0 **已完成**。**Phase 1 六个 View 已全部 E2E**。
+
+| **Impact** | JS/TS, Python | **Yes** | `lucid.openImpact`; scopeId = state |
+| **Structure** | JS/TS, Python | **Yes** | `lucid.openStructure`; scopeId = module stem |
+
+| Layer | Status |
+| --- | --- |
+| CLI `analyze` | Done (Phase 0) |
+| Phase 1 Views (6) | Done — E2E graph + VF + push |
+| **Phase 2 extension UI** | **Done** — cross-file pull, trace JSON, translation, chokidar |
+
+**中文：** **Phase 2 扩展 UI 已完成**——跨文件 pull、trace JSON、translation 命令、chokidar。
+
+| Cross-file def-use | **Done** — workspace pull refresh on `lucid.pull` |
+| Trace overlay | **Done** — auto `.lucid/trace.json` (chokidar) + manual reload command |
+| Translation VF | **Done** — `lucid.openTranslation` (Python→C++ scaffold) |
+| chokidar pull hint | **Done** — file watch → Pull prompt |
+| Graph rebind | Confirm dialog only; IR edge update **not implemented** |
+
+**Next:** T21 graph rebind → IR edge update; Phase 3 RPCM.
+
+**中文：** 下一步：T21 图重绑→IR 边更新；Phase 3 RPCM。
+
+### Change Workflow / 变更工作流
+
+**EN:** **`DESIGN.md` is the only product truth.** When the user decides scope or priority:
+
+**中文：** **`DESIGN.md` 是唯一产品真源。** 用户确定范围或优先级后：
+
+```
+User input / 用户决策
+    ↓
+DESIGN.md  (update truth + implementation status)
+    ↓
+README · MANUAL · PURPOSE · ARCHITECTURE · WORKFLOW · TASKS
+    ↓
+Tests → Code → npm test
+```
+
+**EN:** Do not mark a phase or View "done" in README/TASKS until DESIGN reflects it.
+
+**中文：** README/TASKS 不得宣称某阶段或 View「已完成」，除非 DESIGN 已同步。
+
 ---
 
 ## Positioning / 定位
@@ -342,14 +399,14 @@ Internal structures include / 内部结构包括：
 
 **中文：** Phase 1 **各 View 做最小可用**——把现有工具找齐、每项最简单集成。非全功能对等。Virtual File push：**`save_selected` / `save_all`**；**范围暂限单文件或单函数**（不多文件 patch）。
 
-| View | Tool (minimal) | Phase 1 depth |
-| --- | --- | --- |
-| Def-Use | ts-morph / Joern | graph + VF + push |
-| Entry Point | ts-morph call tree, cytoscape-dagre | graph + VF + push |
-| Impact | IR propagation | graph (minimal) |
-| Structure | dependency-cruiser | graph (minimal) |
-| Event Flow | static triggers | graph (minimal) |
-| Data Flow | length+interpretation edges | graph (minimal) |
+| View | Tool (minimal) | Phase 1 depth | Status (20260703) |
+| --- | --- | --- | --- |
+| Def-Use | ts-morph / Joern | graph + VF + push | **Shipped** (JS/TS) |
+| Data Flow | length+interpretation edges | graph + VF + push | **Shipped** (Python) |
+| Entry Point | ts-morph call tree, cytoscape breadthfirst | graph + VF + push | **Shipped** (JS/TS) |
+| Impact | IR propagation | graph + VF + push | **Shipped** |
+| Structure | ts-morph / Python imports | graph + VF + push | **Shipped** |
+| Event Flow | static triggers | graph + VF + push | **Shipped** (JS/TS) |
 
 **EN:** Push (`save_selected` / `save_all`) on **single file or function** only in Phase 1.
 
@@ -371,10 +428,19 @@ Internal structures include / 内部结构包括：
 
 **中文：** 单向副本模式；不用 LLM。同一 Virtual File 管线，换 **Translation** 排版。
 
-| Direction | Tool (target) |
+**EN (20260704 user decision):** **No full modern Rust→C++ conversion.** Rust path is at most a **Rust-flavored safe C++** dialect—RAII, explicit ownership wrappers, project `#pragma lucid_safe` rules, or an **early-Rust-style subset**. Python→C++ remains the primary wired path (py2cpp / PyCer when integrated).
+
+**中文（用户 20260704）：** **不做完整现代 Rust→C++ 转换。** Rust 侧最多产出 **Rust 思路的安全 C++**——RAII、显式所有权包装、项目级 `#pragma lucid_safe` 规则，或 **早期 Rust 子集**。Python→C++ 仍是主接入路径。
+
+**EN:** **C++→assembly** is **not** a Lucid translator—invoke the **system compiler** (`clang -S`, `gcc -S`, etc.) for inspection; Lucid may link to that output in a View later, not reimplement lowering.
+
+**中文：** **C++→汇编** 不由 Lucid 自研转换器完成——用 **系统编译器**（`clang -S`、`gcc -S` 等）查看；Lucid 后续可在 View 中链到该输出，不重写 lowering。
+
+| Direction | Tool / approach |
 | --- | --- |
 | Python → C++ | py2cpp / py14 / PyCer |
-| Rust → C++ | Hand-written mapping (ownership → RAII) / 手写映射规则 |
+| Rust → safe C++ | Restricted dialect scaffold (`safe-cpp-rust`); not idiomatic modern C++ from full Rust |
+| C++ → assembly | **System compiler** (clang/gcc `-S`); Lucid does not replace it |
 
 ```
 Select scope in any View / 在任意 View 选定范围
@@ -424,23 +490,31 @@ lucid analyze Cart.tsx
 - Manual fold; graph↔document↔real sync (no RPCM automation)
 - pull / push overlay / push fork / discard
 - Fork: same-file or same-directory; default name + user edit
-- User-confirmed rebind via graph nodes
-- Practical Views integrated (Def-Use minimum end-to-end)
+- User-confirmed rebind via graph nodes (**rebind IR update still pending**)
+- **Def-Use E2E (JS/TS)** and **Data Flow E2E (Python)** — remaining Views still stubs
+
+**中文：** **Def-Use（JS/TS）** 与 **Data Flow（Python）** 已端到端；其余 View 仍为 stub。
 
 **Success metric / 成功标准:** On three unfamiliar repos, time and file hops to understand one core state **drop** vs plain VSCode (record before/after Phase 1).
 
 ### Phase 2 — Cross-File + Trace + Translation / 跨文件、Trace、转换
 
-- Workspace-folder def-use; cross-file Projection Slice (when needed)
-- Runtime trace overlay (`inferred` vs `observed`)
-- Translation Virtual Files (Python/Rust → C++)
+**EN:** **Extension UI wired** (20260704) — cross-file def-use pull, trace overlay JSON, translation VF, chokidar Pull hint.
+
+**中文：** **扩展 UI 已接入**（20260704）——跨文件 def-use pull、trace overlay JSON、translation VF、chokidar Pull 提示。
+
+- Workspace-folder def-use; cross-file Projection Slice on pull
+- Runtime trace overlay (`inferred` vs `observed`) — **auto** from `.lucid/trace.json` (chokidar); manual reload command as fallback
+- Translation Virtual Files (Python → C++ scaffold; one-way copy)
+- chokidar watches backing source files → "Pull now" prompt
 
 ### Phase 3 — RPCM + Prevention + Lowering / RPCM、预防、降级
 
 - **Cognitive WS (RPCM):** automated Load/Mutate/Compress, collapse prediction, adaptive projection (`thoughts/recognition_matrix.md`)
 - `explicit` contract enforcement on push
 - View thrashing signals → block or warn on save
-- Lucid IR → MLIR; lowering toward assembly
+- Lucid IR → MLIR (research path for IR tooling; **separate from C++→ASM**)
+- **C++→assembly:** delegate to **existing compilers** (clang/gcc); Lucid surfaces output, does not custom-lowering
 - Constrained generation after understanding tools are stable
 
 ---

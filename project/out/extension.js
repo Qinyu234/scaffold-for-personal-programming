@@ -39,20 +39,77 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.activate = activate;
 exports.deactivate = deactivate;
 const vscode = __importStar(require("vscode"));
+const language_1 = require("./ingestion/language");
+const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const analyze_1 = require("./core/analyze");
 const graph_1 = require("./projection/graph");
 const session_1 = require("./virtual/session");
+const data_flow_slice_1 = require("./projection/data-flow-slice");
+const entry_point_slice_1 = require("./projection/entry-point-slice");
+const event_flow_slice_1 = require("./projection/event-flow-slice");
+const impact_slice_1 = require("./projection/impact-slice");
+const translation_1 = require("./virtual/translation");
+const trace_session_1 = require("./virtual/trace-session");
+const trace_apply_1 = require("./virtual/trace-apply");
+const lucid_paths_1 = require("./extension/lucid-paths");
+const trace_watch_1 = require("./extension/trace-watch");
+const session_store_1 = require("./extension/session-store");
+const file_watch_1 = require("./extension/file-watch");
 const push_1 = require("./virtual/push");
 const fork_1 = require("./virtual/fork");
 const fold_store_1 = require("./virtual/fold-store");
 const lucid_fs_1 = require("./extension/lucid-fs");
 const graph_panel_1 = require("./extension/graph-panel");
-const session_store_1 = require("./extension/session-store");
+const session_store_2 = require("./extension/session-store");
 let extContext;
 let activeUri;
 function workspaceRoot() {
     return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+}
+function graphSpecForSession(session) {
+    switch (session.viewType) {
+        case 'def-use':
+            return (0, graph_1.graphFromDefUseSlice)(session.slice);
+        case 'data-flow':
+            return (0, graph_1.graphFromDataFlowSlice)(session.slice);
+        case 'entry-point':
+            return (0, graph_1.graphFromEntryPointSlice)(session.slice);
+        case 'event-flow':
+            return (0, graph_1.graphFromEventFlowSlice)(session.slice);
+        case 'impact':
+            return (0, graph_1.graphFromImpactSlice)(session.slice);
+        case 'structure':
+            return (0, graph_1.graphFromStructureSlice)(session.slice);
+        default:
+            return undefined;
+    }
+}
+function refreshGraphForActiveSession() {
+    const uri = activeUri;
+    if (!uri) {
+        return;
+    }
+    const session = (0, session_store_2.getSession)(uri);
+    if (!session) {
+        return;
+    }
+    const spec = graphSpecForSession(session);
+    if (spec) {
+        graph_panel_1.GraphPanel.show(extContext, spec, handleGraphMessage(uri));
+    }
+}
+async function mergeTraceIntoActiveSession(events) {
+    const uri = activeUri;
+    const session = uri ? (0, session_store_2.getSession)(uri) : undefined;
+    if (!session) {
+        return 0;
+    }
+    const updated = (0, trace_apply_1.applyTraceToSession)(session, events, workspaceRoot());
+    (0, session_store_2.putSession)(updated);
+    refreshGraphForActiveSession();
+    await openVirtualDocument(uri);
+    return events.length;
 }
 async function openVirtualDocument(uri) {
     const doc = await vscode.workspace.openTextDocument(vscode.Uri.parse(uri));
@@ -66,13 +123,13 @@ function handleGraphMessage(uri) {
             return;
         }
         if (m.type === 'nodeSelected' && m.nodeId) {
-            const s = (0, session_store_1.getSession)(uri);
+            const s = (0, session_store_2.getSession)(uri);
             if (!s) {
                 return;
             }
             const seg = s.document.segments.find(x => m.nodeId.includes(String(x.sourceLine)));
             if (seg && seg.enclosingFunction !== '<module>') {
-                (0, session_store_1.updateSession)(uri, (0, push_1.selectSegmentForFunction)(s, seg.enclosingFunction));
+                (0, session_store_2.updateSession)(uri, (0, push_1.selectSegmentForFunction)(s, seg.enclosingFunction));
             }
             return;
         }
@@ -89,7 +146,7 @@ function handleGraphMessage(uri) {
     };
 }
 async function runFork(uri) {
-    const session = (0, session_store_1.getSession)(uri);
+    const session = (0, session_store_2.getSession)(uri);
     if (!session) {
         return;
     }
@@ -122,13 +179,80 @@ async function runFork(uri) {
         }
     }
 }
+async function startTranslation(filePath, scopeId) {
+    const session = (0, translation_1.createTranslationSession)({ sourceFile: filePath, scopeId, targetLang: 'cpp' }, workspaceRoot());
+    const uri = (0, session_store_2.putSession)(session);
+    activeUri = uri;
+    await openVirtualDocument(uri);
+    void vscode.window.showInformationMessage('Lucid: translation scaffold (Python→C++). Source untouched until you copy/push manually.');
+}
+async function startStructure(filePath) {
+    const session = (0, session_1.createStructureSession)(filePath, workspaceRoot());
+    if (!session) {
+        void vscode.window.showWarningMessage('Lucid: no structure slice for this file.');
+        return;
+    }
+    const uri = (0, session_store_2.putSession)(session);
+    activeUri = uri;
+    const spec = (0, graph_1.graphFromStructureSlice)(session.slice);
+    graph_panel_1.GraphPanel.show(extContext, spec, handleGraphMessage(uri));
+    await openVirtualDocument(uri);
+}
+async function startImpact(filePath, stateName) {
+    const session = (0, session_1.createImpactSession)(filePath, stateName, workspaceRoot());
+    if (!session) {
+        void vscode.window.showWarningMessage(`Lucid: no impact slice for "${stateName}".`);
+        return;
+    }
+    const uri = (0, session_store_2.putSession)(session);
+    activeUri = uri;
+    const spec = (0, graph_1.graphFromImpactSlice)(session.slice);
+    graph_panel_1.GraphPanel.show(extContext, spec, handleGraphMessage(uri));
+    await openVirtualDocument(uri);
+}
+async function startEventFlow(filePath, stateName) {
+    const session = (0, session_1.createEventFlowSession)(filePath, stateName, workspaceRoot());
+    if (!session) {
+        void vscode.window.showWarningMessage(`Lucid: no event-flow slice for "${stateName}".`);
+        return;
+    }
+    const uri = (0, session_store_2.putSession)(session);
+    activeUri = uri;
+    const spec = (0, graph_1.graphFromEventFlowSlice)(session.slice);
+    graph_panel_1.GraphPanel.show(extContext, spec, handleGraphMessage(uri));
+    await openVirtualDocument(uri);
+}
+async function startEntryPoint(filePath, entryName) {
+    const session = (0, session_1.createEntryPointSession)(filePath, entryName, workspaceRoot());
+    if (!session) {
+        void vscode.window.showWarningMessage(`Lucid: no entry-point slice for "${entryName}".`);
+        return;
+    }
+    const uri = (0, session_store_2.putSession)(session);
+    activeUri = uri;
+    const spec = (0, graph_1.graphFromEntryPointSlice)(session.slice);
+    graph_panel_1.GraphPanel.show(extContext, spec, handleGraphMessage(uri));
+    await openVirtualDocument(uri);
+}
+async function startDataFlow(filePath, dataName) {
+    const session = (0, session_1.createDataFlowSession)(filePath, dataName, workspaceRoot());
+    if (!session) {
+        void vscode.window.showWarningMessage(`Lucid: no data-flow slice for "${dataName}".`);
+        return;
+    }
+    const uri = (0, session_store_2.putSession)(session);
+    activeUri = uri;
+    const spec = (0, graph_1.graphFromDataFlowSlice)(session.slice);
+    graph_panel_1.GraphPanel.show(extContext, spec, handleGraphMessage(uri));
+    await openVirtualDocument(uri);
+}
 async function startDefUse(filePath, stateName) {
     const session = (0, session_1.createDefUseSession)(filePath, stateName, workspaceRoot());
     if (!session) {
         void vscode.window.showWarningMessage(`Lucid: no slice for "${stateName}".`);
         return;
     }
-    const uri = (0, session_store_1.putSession)(session);
+    const uri = (0, session_store_2.putSession)(session);
     activeUri = uri;
     const spec = (0, graph_1.graphFromDefUseSlice)(session.slice);
     graph_panel_1.GraphPanel.show(extContext, spec, handleGraphMessage(uri));
@@ -136,6 +260,20 @@ async function startDefUse(filePath, stateName) {
 }
 function activate(context) {
     extContext = context;
+    const root = workspaceRoot();
+    (0, session_store_1.setOnSessionsChanged)(() => (0, file_watch_1.syncLucidFileWatch)(file_watch_1.notifySourceChanged));
+    (0, trace_watch_1.syncTraceJsonWatch)(root, ({ eventCount, sessionCount }) => {
+        if (sessionCount > 0) {
+            refreshGraphForActiveSession();
+            void vscode.window.showInformationMessage(`Lucid: auto-loaded ${eventCount} trace event(s) from .lucid/trace.json (${sessionCount} session(s)).`);
+        }
+    });
+    context.subscriptions.push({
+        dispose: () => {
+            (0, file_watch_1.disposeLucidFileWatch)();
+            (0, trace_watch_1.disposeTraceJsonWatch)();
+        },
+    });
     const fsProvider = new lucid_fs_1.LucidFileSystemProvider();
     context.subscriptions.push(vscode.workspace.registerFileSystemProvider('lucid', fsProvider, { isCaseSensitive: true }));
     context.subscriptions.push(vscode.commands.registerCommand('lucid.openDefUse', async () => {
@@ -155,6 +293,150 @@ function activate(context) {
         if (stateName) {
             await startDefUse(editor.document.uri.fsPath, stateName);
         }
+    }), vscode.commands.registerCommand('lucid.openEventFlow', async () => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) {
+            void vscode.window.showWarningMessage('Lucid: no active editor.');
+            return;
+        }
+        const filePath = editor.document.uri.fsPath;
+        if ((0, language_1.detectLanguage)(filePath) !== 'typescript') {
+            void vscode.window.showWarningMessage('Lucid: Event Flow View requires a JS/TS file.');
+            return;
+        }
+        const names = (0, event_flow_slice_1.listEventFlowStates)(filePath);
+        if (names.length === 0) {
+            void vscode.window.showInformationMessage('Lucid: no state variables found.');
+            return;
+        }
+        const stateName = await vscode.window.showQuickPick(names, { title: 'Select state (scopeId)' });
+        if (stateName) {
+            await startEventFlow(filePath, stateName);
+        }
+    }), vscode.commands.registerCommand('lucid.openEntryPoint', async () => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) {
+            void vscode.window.showWarningMessage('Lucid: no active editor.');
+            return;
+        }
+        const filePath = editor.document.uri.fsPath;
+        if ((0, language_1.detectLanguage)(filePath) !== 'typescript') {
+            void vscode.window.showWarningMessage('Lucid: Entry Point View requires a JS/TS file.');
+            return;
+        }
+        const names = (0, entry_point_slice_1.listEntryPointFunctions)(filePath);
+        if (names.length === 0) {
+            void vscode.window.showInformationMessage('Lucid: no functions found.');
+            return;
+        }
+        const entryName = await vscode.window.showQuickPick(names, { title: 'Select entry function (scopeId)' });
+        if (entryName) {
+            await startEntryPoint(filePath, entryName);
+        }
+    }), vscode.commands.registerCommand('lucid.openDataFlow', async () => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) {
+            void vscode.window.showWarningMessage('Lucid: no active editor.');
+            return;
+        }
+        const filePath = editor.document.uri.fsPath;
+        if ((0, language_1.detectLanguage)(filePath) !== 'python') {
+            void vscode.window.showWarningMessage('Lucid: Data Flow View requires a Python file (DESIGN Phase 1).');
+            return;
+        }
+        const names = (0, data_flow_slice_1.listPythonDataNames)(filePath);
+        if (names.length === 0) {
+            void vscode.window.showInformationMessage('Lucid: no data variables found.');
+            return;
+        }
+        const dataName = await vscode.window.showQuickPick(names, { title: 'Select data (scopeId)' });
+        if (dataName) {
+            await startDataFlow(filePath, dataName);
+        }
+    }), vscode.commands.registerCommand('lucid.loadTraceOverlay', async () => {
+        const uri = activeUri;
+        const session = uri ? (0, session_store_2.getSession)(uri) : undefined;
+        if (!session) {
+            void vscode.window.showWarningMessage('Lucid: open a Virtual File session first.');
+            return;
+        }
+        const defaultPath = (0, lucid_paths_1.traceJsonPath)(workspaceRoot());
+        let text;
+        if (fs.existsSync(defaultPath)) {
+            text = fs.readFileSync(defaultPath, 'utf8');
+        }
+        else {
+            const picks = await vscode.window.showOpenDialog({
+                canSelectMany: false,
+                filters: { JSON: ['json'] },
+                title: 'Select trace events JSON (default: .lucid/trace.json)',
+            });
+            if (!picks?.[0]) {
+                return;
+            }
+            text = fs.readFileSync(picks[0].fsPath, 'utf8');
+        }
+        try {
+            const events = (0, trace_session_1.parseTraceEventsJson)(text);
+            const count = await mergeTraceIntoActiveSession(events);
+            void vscode.window.showInformationMessage(`Lucid: merged ${count} trace event(s).`);
+        }
+        catch (e) {
+            void vscode.window.showErrorMessage(`Lucid: trace load failed — ${e}`);
+        }
+    }), vscode.commands.registerCommand('lucid.openTranslation', async () => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) {
+            void vscode.window.showWarningMessage('Lucid: no active editor.');
+            return;
+        }
+        const filePath = editor.document.uri.fsPath;
+        if ((0, language_1.detectLanguage)(filePath) !== 'python') {
+            void vscode.window.showWarningMessage('Lucid: Translation requires a Python file (Phase 2).');
+            return;
+        }
+        const names = (0, data_flow_slice_1.listPythonDataNames)(filePath);
+        if (names.length === 0) {
+            void vscode.window.showInformationMessage('Lucid: no Python variables found.');
+            return;
+        }
+        const scopeId = await vscode.window.showQuickPick(names, { title: 'Translation scopeId' });
+        if (scopeId) {
+            await startTranslation(filePath, scopeId);
+        }
+    }), vscode.commands.registerCommand('lucid.openStructure', async () => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) {
+            void vscode.window.showWarningMessage('Lucid: no active editor.');
+            return;
+        }
+        const filePath = editor.document.uri.fsPath;
+        if (!(0, language_1.isSupportedSourceFile)(filePath)) {
+            void vscode.window.showWarningMessage('Lucid: Structure View requires a supported source file.');
+            return;
+        }
+        await startStructure(filePath);
+    }), vscode.commands.registerCommand('lucid.openImpact', async () => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) {
+            void vscode.window.showWarningMessage('Lucid: no active editor.');
+            return;
+        }
+        const filePath = editor.document.uri.fsPath;
+        const lang = (0, language_1.detectLanguage)(filePath);
+        if (lang !== 'typescript' && lang !== 'python') {
+            void vscode.window.showWarningMessage('Lucid: Impact View requires JS/TS or Python.');
+            return;
+        }
+        const names = (0, impact_slice_1.listImpactStates)(filePath);
+        if (names.length === 0) {
+            void vscode.window.showInformationMessage('Lucid: no state variables found.');
+            return;
+        }
+        const stateName = await vscode.window.showQuickPick(names, { title: 'Select state (scopeId)' });
+        if (stateName) {
+            await startImpact(filePath, stateName);
+        }
     }), vscode.commands.registerCommand('lucid.analyzeState', () => vscode.commands.executeCommand('lucid.openDefUse')), vscode.commands.registerCommand('lucid.openView', async () => {
         const viewType = await vscode.window.showQuickPick(['def-use', 'entry-point', 'impact', 'structure', 'event-flow', 'data-flow'], { title: 'Lucid view' });
         if (!viewType) {
@@ -162,6 +444,26 @@ function activate(context) {
         }
         if (viewType === 'def-use') {
             await vscode.commands.executeCommand('lucid.openDefUse');
+            return;
+        }
+        if (viewType === 'data-flow') {
+            await vscode.commands.executeCommand('lucid.openDataFlow');
+            return;
+        }
+        if (viewType === 'entry-point') {
+            await vscode.commands.executeCommand('lucid.openEntryPoint');
+            return;
+        }
+        if (viewType === 'event-flow') {
+            await vscode.commands.executeCommand('lucid.openEventFlow');
+            return;
+        }
+        if (viewType === 'impact') {
+            await vscode.commands.executeCommand('lucid.openImpact');
+            return;
+        }
+        if (viewType === 'structure') {
+            await vscode.commands.executeCommand('lucid.openStructure');
             return;
         }
         const scopeId = await vscode.window.showInputBox({ title: 'scopeId' });
@@ -174,23 +476,23 @@ function activate(context) {
         }
     }), vscode.commands.registerCommand('lucid.pull', async () => {
         const uri = activeUri;
-        const session = uri ? (0, session_store_1.getSession)(uri) : undefined;
+        const session = uri ? (0, session_store_2.getSession)(uri) : undefined;
         if (!session) {
             return;
         }
         const choice = await vscode.window.showWarningMessage('Lucid: source changed — choose merge strategy', { modal: true }, 'Keep virtual edits', 'Discard virtual edits');
         const pulled = (0, session_1.pullSession)(session, workspaceRoot());
         if (choice === 'Discard virtual edits') {
-            (0, session_store_1.putSession)(pulled);
+            (0, session_store_2.putSession)(pulled);
             await openVirtualDocument(uri);
         }
         else if (choice === 'Keep virtual edits') {
-            pulled.document.text = (0, session_store_1.getDocumentText)(uri) ?? pulled.document.text;
-            (0, session_store_1.putSession)(pulled);
+            pulled.document.text = (0, session_store_2.getDocumentText)(uri) ?? pulled.document.text;
+            (0, session_store_2.putSession)(pulled);
         }
     }), vscode.commands.registerCommand('lucid.toggleFold', async () => {
         const uri = activeUri;
-        const session = uri ? (0, session_store_1.getSession)(uri) : undefined;
+        const session = uri ? (0, session_store_2.getSession)(uri) : undefined;
         if (!session) {
             return;
         }
@@ -201,7 +503,7 @@ function activate(context) {
         }
         const toggled = (0, session_1.toggleFunctionFold)(session, pick);
         (0, fold_store_1.saveFoldState)(workspaceRoot(), session.scopeId, toggled.collapsedFunctions);
-        (0, session_store_1.putSession)(toggled);
+        (0, session_store_2.putSession)(toggled);
         await openVirtualDocument(uri);
     }), vscode.commands.registerCommand('lucid.saveSelected', async () => {
         const editor = vscode.window.activeTextEditor;
@@ -209,38 +511,38 @@ function activate(context) {
         if (!uri?.startsWith('lucid:')) {
             return;
         }
-        const session = (0, session_store_1.getSession)(uri);
+        const session = (0, session_store_2.getSession)(uri);
         if (!session) {
             return;
         }
-        const text = editor?.document.getText() ?? (0, session_store_1.getDocumentText)(uri) ?? '';
+        const text = editor?.document.getText() ?? (0, session_store_2.getDocumentText)(uri) ?? '';
         const result = (0, push_1.pushOverlay)(session, text, 'selected');
         void vscode.window.showInformationMessage(`Lucid: save_selected — ${result.updatedLines} line(s).`);
-        (0, session_store_1.putSession)((0, session_1.pullSession)(session, workspaceRoot()));
+        (0, session_store_2.putSession)((0, session_1.pullSession)(session, workspaceRoot()));
     }), vscode.commands.registerCommand('lucid.saveAll', async () => {
         const editor = vscode.window.activeTextEditor;
         const uri = editor?.document.uri.toString() ?? activeUri;
         if (!uri?.startsWith('lucid:')) {
             return;
         }
-        const session = (0, session_store_1.getSession)(uri);
+        const session = (0, session_store_2.getSession)(uri);
         if (!session) {
             return;
         }
-        const text = editor?.document.getText() ?? (0, session_store_1.getDocumentText)(uri) ?? '';
+        const text = editor?.document.getText() ?? (0, session_store_2.getDocumentText)(uri) ?? '';
         const result = (0, push_1.pushOverlay)(session, text, 'all');
         void vscode.window.showInformationMessage(`Lucid: save_all — ${result.updatedLines} line(s).`);
-        (0, session_store_1.putSession)((0, session_1.pullSession)(session, workspaceRoot()));
+        (0, session_store_2.putSession)((0, session_1.pullSession)(session, workspaceRoot()));
     }), vscode.commands.registerCommand('lucid.discard', async () => {
         const uri = activeUri;
         if (!uri) {
             return;
         }
-        const session = (0, session_store_1.getSession)(uri);
+        const session = (0, session_store_2.getSession)(uri);
         if (!session) {
             return;
         }
-        (0, session_store_1.putSession)((0, session_1.pullSession)(session, workspaceRoot()));
+        (0, session_store_2.putSession)((0, session_1.pullSession)(session, workspaceRoot()));
         await openVirtualDocument(uri);
     }), vscode.commands.registerCommand('lucid.fork', async () => {
         if (activeUri) {
@@ -251,12 +553,15 @@ function activate(context) {
         if (doc.uri.scheme !== 'file') {
             return;
         }
-        for (const [, session] of (0, session_store_1.allSessions)()) {
+        for (const [, session] of (0, session_store_2.allSessions)()) {
             if (session.sourceFilePath === doc.uri.fsPath && activeUri) {
                 void vscode.window.showInformationMessage('Lucid: real file saved — run Lucid: Pull to merge.');
             }
         }
     }));
 }
-function deactivate() { }
+function deactivate() {
+    (0, file_watch_1.disposeLucidFileWatch)();
+    (0, trace_watch_1.disposeTraceJsonWatch)();
+}
 //# sourceMappingURL=extension.js.map

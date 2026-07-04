@@ -7,15 +7,21 @@ import { buildVirtualUri } from '../virtual/uri';
 
 const sessions = new Map<string, VirtualSession>();
 const dirtyText = new Map<string, string>();
+let onSessionsChanged: (() => void) | undefined;
+
+export function setOnSessionsChanged(handler: () => void): void {
+  onSessionsChanged = handler;
+}
 
 export function sessionKey(session: VirtualSession): string {
-  return buildVirtualUri(session.viewType, session.scopeId, session.sourceFilePath);
+  return session.lineage.virtualUri;
 }
 
 export function putSession(session: VirtualSession): string {
   const key = sessionKey(session);
   sessions.set(key, session);
   dirtyText.set(key, session.document.text);
+  onSessionsChanged?.();
   return key;
 }
 

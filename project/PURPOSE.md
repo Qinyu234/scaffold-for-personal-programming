@@ -9,14 +9,14 @@
 ## Goal / 目标
 
 1. **Phase 0** — Lucid IR (selection criteria); stable spans for Cut.
-2. **Phase 1** — **VS Code extension** + Projection Slice + Virtual File sync (JS/Python UI).
+2. **Phase 1** — **VS Code extension** + Views + Virtual File sync (JS/Python UI). **In progress** (Def-Use + Data Flow E2E as of 20260703).
 3. **Core library** — shared by extension and CLI.
 4. Tests gate every change; bilingual docs per `LANGUAGE.md`.
 
 **中文：**
 
 1. **Phase 0** — Lucid IR；稳定 span 供 Cut。
-2. **Phase 1** — **VS Code 扩展** + Projection Slice + Virtual File sync（JS/Python UI）。
+2. **Phase 1** — **VS Code 扩展** + Projection Slice + Virtual File sync（JS/Python UI）。**进行中**（20260703：Def-Use + Data Flow 已 E2E）。
 3. **核心库** — 扩展与 CLI 共用。
 4. 测试门槛；文档按 `LANGUAGE.md` 双语。
 

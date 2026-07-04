@@ -1,32 +1,27 @@
 # Project Core / 项目核心
 
-**EN:** Short pointer — not a second design source.
+**EN:** Short pointer — not a second design source. **`../DESIGN.md` is the only truth.**
 
-**中文：** 简短指针，非第二套设计真源。
+**中文：** 简短指针，非第二套设计真源。**`../DESIGN.md` 为唯一真源。**
 
 ## Source Of Truth / 真源
 
-| Topic | File | 中文 |
-| --- | --- | --- |
-| Product vision | `../DESIGN.md` | 产品愿景 |
-| Language policy | `../LANGUAGE.md` | 语言规范 |
-| Execution workflow | `WORKFLOW.md` | 执行工作流 |
-| Architecture boundary | `ARCHITECTURE.md` | 架构边界 |
+| Topic | File |
+| --- | --- |
+| Product vision + implementation status | `../DESIGN.md` |
+| Change workflow | `../DESIGN.md` § Change Workflow |
+| Execution | `WORKFLOW.md`, `TASKS.md` |
 
-## Current Core / 当前核心
+## Shipped Views (20260703) / 已交付 View
 
-```text
-source file → ingestion → analysis → contract JSON → CLI output
-源文件 → 摄入 → 分析 → 合约 JSON → CLI 输出
-```
+| View | Module entry |
+| --- | --- |
+| Def-Use (JS/TS) | `projection/def-use-slice.ts`, `virtual/session.ts` |
+| Data Flow (Python) | `analysis/data-type.ts`, `projection/data-flow-slice.ts` |
+| Entry Point (JS/TS) | `projection/entry-point-slice.ts` |
+| Event Flow (JS/TS) | `projection/event-flow-slice.ts` |
 
-**Entrypoints / 入口**
+## Entrypoints / 入口
 
-- `src/cli.ts`
-- `src/analysis/contract.ts`
-
-## Important Correction / 重要更正
-
-**EN:** Older versions described deleted Python paths (`project/cli.py`) and platform layers not active today. Do not treat those as implementation truth.
-
-**中文：** 旧版曾描述已删除的 Python 路径（如 `project/cli.py`）及当前未启用的平台层，勿再当作实现真源。
+- `src/cli.ts` — headless analyze
+- `src/extension.ts` — `lucid.openDefUse`, `lucid.openDataFlow`, `lucid.openEntryPoint`, `lucid.openEventFlow`

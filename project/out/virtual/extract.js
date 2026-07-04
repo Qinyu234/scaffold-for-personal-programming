@@ -40,6 +40,7 @@ exports.readSourceLines = readSourceLines;
 exports.getLineContent = getLineContent;
 exports.writeSourceLines = writeSourceLines;
 exports.replaceSourceLine = replaceSourceLine;
+exports.replaceSourceRange = replaceSourceRange;
 const fs = __importStar(require("fs"));
 function readSourceLines(filePath) {
     const raw = fs.readFileSync(filePath, 'utf8');
@@ -60,6 +61,15 @@ function replaceSourceLine(filePath, lineNumber, newContent) {
         return;
     }
     lines[lineNumber - 1] = newContent;
+    writeSourceLines(filePath, lines);
+}
+function replaceSourceRange(filePath, startLine, endLine, newLines) {
+    const lines = readSourceLines(filePath);
+    if (startLine < 1 || endLine < startLine || startLine > lines.length) {
+        return;
+    }
+    const end = Math.min(endLine, lines.length);
+    lines.splice(startLine - 1, end - startLine + 1, ...newLines);
     writeSourceLines(filePath, lines);
 }
 //# sourceMappingURL=extract.js.map

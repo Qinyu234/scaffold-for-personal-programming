@@ -9,7 +9,7 @@ export interface SourceSpan {
   line: number;
   column: number;
   enclosingFunction: string;
-  kind: 'define' | 'write' | 'use' | 'trigger';
+  kind: 'define' | 'write' | 'use' | 'trigger' | 'import';
   variableName?: string;
   event?: string;
   provenance?: SpanProvenance;

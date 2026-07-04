@@ -8,16 +8,36 @@ import { VirtualDocument, VirtualSession, Lineage } from './types';
 import { ProjectionSlice } from '../projection/def-use-slice';
 import { buildTranslationUri } from './uri';
 
-export type TranslationTarget = 'cpp';
+export type TranslationTarget = 'cpp' | 'safe-cpp-rust';
+
+/** Phase 2+: Python subset → C++ via py2cpp / PyCer (when wired). */
+export type TranslationSource = 'python' | 'rust';
 
 export interface TranslationRequest {
   sourceFile: string;
   scopeId: string;
   targetLang: TranslationTarget;
+  /** Defaults from file extension when omitted. */
+  sourceLang?: TranslationSource;
 }
 
 function readFileText(filePath: string): string {
   return fs.readFileSync(filePath, 'utf8');
+}
+
+function placeholderSafeCppFromRust(source: string, scopeId: string): string {
+  const lines = [
+    `// Lucid translation (scaffold): Rust-flavored *safe* C++`,
+    `// scope: ${scopeId}`,
+    `// DESIGN: not modern Rust→C++ — restricted "safe C++" dialect (RAII, no raw owning pointers).`,
+    `// Target: early-Rust-style subset OR project-specific #pragma lucid_safe rules.`,
+    '',
+    '#pragma once',
+    '// TODO: map ownership/borrow checks to explicit safe wrappers',
+    `// --- source excerpt ---`,
+    ...source.split(/\r?\n/).slice(0, 40).map(l => `// ${l}`),
+  ];
+  return lines.join('\n');
 }
 
 function placeholderCppFromPython(source: string, scopeId: string): string {
@@ -35,10 +55,15 @@ function placeholderCppFromPython(source: string, scopeId: string): string {
 
 export function buildTranslationDocument(req: TranslationRequest): VirtualDocument {
   const source = readFileText(req.sourceFile);
-  const text =
-    req.targetLang === 'cpp'
-      ? placeholderCppFromPython(source, req.scopeId)
-      : `// unsupported target: ${req.targetLang}`;
+  const sourceLang = req.sourceLang ?? (req.sourceFile.endsWith('.rs') ? 'rust' : 'python');
+  let text: string;
+  if (req.targetLang === 'safe-cpp-rust' || sourceLang === 'rust') {
+    text = placeholderSafeCppFromRust(source, req.scopeId);
+  } else if (req.targetLang === 'cpp') {
+    text = placeholderCppFromPython(source, req.scopeId);
+  } else {
+    text = `// unsupported target: ${req.targetLang}`;
+  }
 
   return {
     text,

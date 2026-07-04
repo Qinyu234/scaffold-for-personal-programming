@@ -3,6 +3,7 @@
  * In-memory session store keyed by lucid:// URI.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.setOnSessionsChanged = setOnSessionsChanged;
 exports.sessionKey = sessionKey;
 exports.putSession = putSession;
 exports.getSession = getSession;
@@ -10,16 +11,20 @@ exports.getDocumentText = getDocumentText;
 exports.setDocumentText = setDocumentText;
 exports.updateSession = updateSession;
 exports.allSessions = allSessions;
-const uri_1 = require("../virtual/uri");
 const sessions = new Map();
 const dirtyText = new Map();
+let onSessionsChanged;
+function setOnSessionsChanged(handler) {
+    onSessionsChanged = handler;
+}
 function sessionKey(session) {
-    return (0, uri_1.buildVirtualUri)(session.viewType, session.scopeId, session.sourceFilePath);
+    return session.lineage.virtualUri;
 }
 function putSession(session) {
     const key = sessionKey(session);
     sessions.set(key, session);
     dirtyText.set(key, session.document.text);
+    onSessionsChanged?.();
     return key;
 }
 function getSession(uri) {
