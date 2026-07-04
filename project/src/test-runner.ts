@@ -1,0 +1,75 @@
+/**
+ * Test runner to execute all unit and integration tests
+ */
+
+import { runTests as runParserTests } from './ingestion/__tests__/parser.test';
+import { runTests as runSymbolsTests } from './ingestion/__tests__/symbols.test';
+import { runTests as runWriteSitesTests } from './analysis/__tests__/write-sites.test';
+import { runTests as runUseSitesTests } from './analysis/__tests__/use-sites.test';
+import { runTests as runContractTests } from './analysis/__tests__/contract.test';
+import { runTests as runCliTests } from './__tests__/cli.test';
+import { runTests as runProjectionSliceTests } from './projection/__tests__/projection-slice.test';
+import { runTests as runVirtualTests } from './virtual/__tests__/virtual.test';
+import { runTests as runPhase2Tests } from './__tests__/phase2.test';
+
+async function main() {
+  console.log('==================================================');
+  console.log('             Lucid Test Suite Runner              ');
+  console.log('==================================================\n');
+
+  const testSuites = [
+    { name: 'Ingestion: Parser Tests', fn: runParserTests },
+    { name: 'Ingestion: Symbol Extraction Tests', fn: runSymbolsTests },
+    { name: 'Analysis: Write Site Scanner Tests', fn: runWriteSitesTests },
+    { name: 'Analysis: Use Site Scanner Tests', fn: runUseSitesTests },
+    { name: 'Analysis: Contract Builder Tests', fn: runContractTests },
+    { name: 'CLI: Command & Trigger Analysis Tests', fn: runCliTests },
+    { name: 'Projection: Def-Use Slice Tests', fn: runProjectionSliceTests },
+    { name: 'Virtual: Layout Push Fork Tests', fn: runVirtualTests },
+    { name: 'Phase 2: Cross-File Trace Translation Tests', fn: runPhase2Tests },
+  ];
+
+  let allSuccess = true;
+  const passedSuites: string[] = [];
+  const failedSuites: string[] = [];
+
+  for (const suite of testSuites) {
+    console.log(`--- Running Suite: ${suite.name} ---`);
+    try {
+      const success = suite.fn();
+      if (success) {
+        passedSuites.push(suite.name);
+      } else {
+        failedSuites.push(suite.name);
+        allSuccess = false;
+      }
+    } catch (error) {
+      console.error(`Suite ${suite.name} threw an uncaught error:`, error);
+      failedSuites.push(suite.name);
+      allSuccess = false;
+    }
+    console.log('--------------------------------------------------\n');
+  }
+
+  console.log('==================================================');
+  console.log('                  Test Summary                    ');
+  console.log('==================================================');
+  console.log(`Total Suites: ${testSuites.length}`);
+  console.log(`Passed:       ${passedSuites.length}`);
+  console.log(`Failed:       ${failedSuites.length}`);
+  
+  if (failedSuites.length > 0) {
+    console.log('\nFailed Suites:');
+    for (const name of failedSuites) {
+      console.log(`  - ${name}`);
+    }
+  }
+  console.log('==================================================\n');
+
+  process.exit(allSuccess ? 0 : 1);
+}
+
+main().catch(err => {
+  console.error('Test runner failed:', err);
+  process.exit(1);
+});

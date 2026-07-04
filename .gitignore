@@ -1,13 +1,17 @@
+# 先全部忽略
 *
-!DRAFT.txt
-!TODO.txt
-!manual.txt
+
+# 允许目录
 !project/
-!project/**
+
+# 允许文件
 !.gitignore
-!prompt.txt
-!todo/
-!run_verifiers.py
-!ARCHITECTURE.html
-!README.md
+!DESIGN.md
+!LANGUAGE.md
 !MANUAL.md
+!README.md
+!PROMPT.txt
+!run_verifiers.py
+
+# 允许目录内部递归
+!project/**

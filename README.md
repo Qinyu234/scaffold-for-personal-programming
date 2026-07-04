@@ -1,64 +1,53 @@
 # Lucid
 
-> A code clarity tool built by a first-year CE student who couldn't read their own code.
+**EN:** Lucid makes hidden code structure visible and editable. You choose what matters (Views), work on a **Virtual File** copy (filter, cut, splice), and sync back via **pull**, **push overlay**, or **push fork**. Phase 0 builds **Lucid IR** as selection criteria; Phase 1 delivers Views + Virtual Files in VSCode.
 
-**The problem:** State scattered across files, no record of who can modify it or what depends on it. Every change required mentally reconstructing the entire dependency chain just to avoid breaking something.
+**中文：** Lucid 让隐藏结构可见且可编辑。用 **View** 选相关内容，在 **Virtual File** 副本上操作（筛选、剪切、拼接），通过 **pull**、**push overlay**、**push fork** 与真源同步。Phase 0 建设 **Lucid IR** 作为选择标准；Phase 1 在 VSCode 交付 Views + Virtual Files。
 
-**The approach:** Extract the implicit access structure of every piece of state — who writes it, who reads it — and make it explicitly queryable. Reorganize the code into a clean virtual layer for editing without touching the original files.
+**Canonical design / 现行设计:** `DESIGN.md` (**20260704**). **Phase 1 shipped:** VS Code extension + Virtual Files.
 
----
+**中文：** 现行设计见 `DESIGN.md`（**20260704**）。**Phase 1 已交付：** VS Code 扩展 + Virtual Files。
 
-## Core concepts
+## What Works (Phase 1) / 当前可用（Phase 1）
 
-**Access Contract** — for every piece of state:
-```json
-{
-  "cartTotal": {
-    "defined": "CartService.ts:12",
-    "write_sites": ["CartService.addItem:L34", "CartService.removeItem:L89"],
-    "use_sites": ["CartSummary.tsx:L45", "CheckoutButton.tsx:L67"],
-    "source": "inferred"
-  }
-}
+- **VS Code extension** — Def-Use flow, graph panel, `lucid://` editable virtual files
+- **Commands** — open view, save selected/all, pull, discard, toggle fold, fork
+- **CLI** — `lucid analyze <file>` (unchanged)
+- **Six views** — def-use full; others minimal graph stubs
+- **JS/TS + Python** — analyze + virtual doc (Python dataflow-oriented IR)
+- **8 test suites** — `npm test`
+
+## What Phase 2 Adds / Phase 2 将新增
+
+- cross-file Projection Slice / 跨文件切片
+- translation virtual files / 语言转换副本
+- runtime trace / 运行时 trace
+- RPCM (Cognitive WS) automation / RPCM 自动化
+
+## Repository Map / 仓库地图
+
+| Path | EN | 中文 |
+| --- | --- | --- |
+| `DESIGN.md` | Product truth (20260704) | 产品真源 |
+| `LANGUAGE.md` | EN/ZH policy | 语言规范 |
+| `MANUAL.md` | Work + use guide | 操作手册 |
+| `project/PURPOSE.md` | Why and phases | 目的与阶段 |
+| `project/ARCHITECTURE.md` | Modules | 模块边界 |
+| `project/TASKS.md` | Test-first tasks | 测试先行任务 |
+| `project/WORKFLOW.md` | Execution index | 执行索引 |
+
+## Quick Start / 快速开始
+
+```bash
+cd project
+npm install
+npm test
+node ./out/cli.js analyze ./examples/CartPanel.tsx
 ```
 
-**Virtual Files** — a projection layer over the real code. Edit here; the tool diffs and patches back. If the real files change externally, the virtual layer regenerates automatically.
+## Workflow / 工作流
 
----
-
-## Architecture
-
-```
-Code → Ingestion → Graph → Analysis → Virtual Layer → Views → Generation (Phase 3)
-```
-
-| View | Question |
-|------|----------|
-| Def-Use Contract | Where is this assigned? Where is it read? ← MVP |
-| Structure | What does the code look like? |
-| Data Flow | Where does this value come from? |
-| Event Flow | What happens after this fires? |
-| Impact | If I change this, what breaks? |
-| Test | Is this covered? Does it meet its performance budget? |
-
-**Using existing tools:** Tree-sitter, ts-morph, dependency-cruiser, Joern, OpenTelemetry, Jest/Vitest, Lighthouse, LangGraph, VSCode Extension API.
-
-**Building:** Virtual Files diff/patch engine, access contract inference, writers → readers impact propagation.
-
----
-
-## Status
-
-Phase 1 in progress — single file parsing, writers/readers extraction, interactive graph view.
-
-Full thinking behind the design: [devlog →](link)
-
----
-
-*Built while learning to read other people's code. Works on any codebase — frontend, backend, or otherwise.*
-
----
-
-## Docs
-
-[Full architecture document](https://htmlpreview.github.io/?https://github.com/Qinyu234/lucid/blob/main/ARCHITECTURE.html) — system layers, data structures, isolation strategy, views, roadmap. Best viewed rendered.
+1. read `DESIGN.md` 20260704 / 读现行设计
+2. follow `project/TASKS.md` / 按任务顺序
+3. tests first / 先测试
+4. bilingual docs per `LANGUAGE.md` / 双语文档

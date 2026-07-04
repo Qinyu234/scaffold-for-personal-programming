@@ -1,93 +1,32 @@
-# PROJECT CORE
+# Project Core / 项目核心
 
-## Lucid Architecture
+**EN:** Short pointer — not a second design source.
 
-Lucid is a code clarity tool that extracts the implicit access structure of every piece of state — who writes it, who reads it — and makes it explicitly queryable.
+**中文：** 简短指针，非第二套设计真源。
 
-### Architecture Layers
+## Source Of Truth / 真源
 
-```
-Code → Ingestion → Graph → Analysis → Virtual Layer → Views → Generation (Phase 3)
-```
+| Topic | File | 中文 |
+| --- | --- | --- |
+| Product vision | `../DESIGN.md` | 产品愿景 |
+| Language policy | `../LANGUAGE.md` | 语言规范 |
+| Execution workflow | `WORKFLOW.md` | 执行工作流 |
+| Architecture boundary | `ARCHITECTURE.md` | 架构边界 |
 
-### Layer Descriptions
+## Current Core / 当前核心
 
-**1. Ingestion Layer** (`core/ingestion/`)
-- Parses source code files
-- Supports multiple languages (Python, JavaScript, TypeScript, Go, Rust, Java, C/C++)
-- Uses tree-sitter for accurate parsing
-- Extracts functions, classes, variables, imports
-- Entry point: `parse_file(file_path)`
-
-**2. Graph Layer** (`core/graph/`)
-- Builds code structure representation
-- Creates nodes for functions, classes, variables
-- Tracks relationships between nodes
-- Entry point: `build_code_graph(parsed_data)`
-
-**3. Analysis Layer** (`core/analysis/`)
-- Extracts Access Contracts for each piece of state
-- Tracks write sites (where variables are assigned)
-- Tracks use sites (where variables are read)
-- Performs def-use analysis
-- Entry point: `extract_access_contracts(graph, source_code)`
-
-**4. Virtual Layer** (`core/virtual_layer/`)
-- Provides a projection layer over real code
-- Enables safe editing without touching original files
-- Supports diff/patch operations
-- Auto-regenerates when real files change externally
-- Entry point: `VirtualFileSystem`
-
-**5. Views Layer** (`core/views/`)
-- Provides different perspectives on code
-- **Def-Use Contract View** (MVP): Shows where variables are assigned and read
-- **Structure View**: Shows overall code structure
-- Entry points: `DefUseView`, `StructureView`
-
-### Core Concepts
-
-**Access Contract** — for every piece of state:
-```json
-{
-  "cartTotal": {
-    "defined": "CartService.ts:12",
-    "write_sites": ["CartService.addItem:L34", "CartService.removeItem:L89"],
-    "use_sites": ["CartSummary.tsx:L45", "CheckoutButton.tsx:L67"],
-    "source": "inferred"
-  }
-}
+```text
+source file → ingestion → analysis → contract JSON → CLI output
+源文件 → 摄入 → 分析 → 合约 JSON → CLI 输出
 ```
 
-**Virtual Files** — a projection layer over the real code. Edit here; the tool diffs and patches back. If the real files change externally, the virtual layer regenerates automatically.
+**Entrypoints / 入口**
 
-### Phase 1 Status
+- `src/cli.ts`
+- `src/analysis/contract.ts`
 
-Phase 1 is in progress — single file parsing, writers/readers extraction, interactive graph view.
+## Important Correction / 重要更正
 
-### CLI Usage
+**EN:** Older versions described deleted Python paths (`project/cli.py`) and platform layers not active today. Do not treat those as implementation truth.
 
-```bash
-# Analyze a file and extract access contracts
-python project/cli.py analyze source.py
-
-# Show access contract for a specific variable
-python project/cli.py analyze source.py --variable cartTotal
-
-# Show summary of all access contracts
-python project/cli.py analyze source.py --summary
-
-# Show code structure
-python project/cli.py structure source.py
-
-# Create virtual file system
-python project/cli.py virtual source.py
-```
-
-### Dependencies
-
-- tree-sitter: Parser for multiple languages
-- tree-sitter-languages: Language grammars
-- pytest: Testing framework
-- PyQt6: GUI framework
-- PyInstaller: Package as exe
+**中文：** 旧版曾描述已删除的 Python 路径（如 `project/cli.py`）及当前未启用的平台层，勿再当作实现真源。

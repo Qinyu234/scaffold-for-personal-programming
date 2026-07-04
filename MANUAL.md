@@ -1,564 +1,168 @@
-# Lucid User Manual
-
-## Overview
+# Lucid Manual / Lucid 操作手册
 
-Lucid is a code analysis tool that helps you understand code structure, access patterns, and dependencies. It provides def-use contract analysis, impact analysis, and virtual file projection capabilities.
+**EN:** This manual has two jobs: how to work on the repository after reading it, and how to use the currently implemented features after reading it.
 
-## Implementation Status
+**中文：** 这份手册只做两件事：说明读完之后如何继续开发，以及说明读完之后如何使用当前已经实现的功能。
 
-### MVP Features (Currently Available)
-- **Layer 1: Ingestion** - Code → AST, symbol table, import relations
-- **Layer 2: Graph** - In-memory graph with writes/reads edges
-- **Layer 3: Analysis** - Access contracts, def-use chain inference, impact analysis
-- **Layer 4: Virtual Layer** - Virtual file projection, diff/patch (pattern implementation)
-- **Layer 5: View** - Text-based visualization
-- **VIEW 01: Structure View** - Code structure overview
-- **VIEW 04: Def-Use Contract View** - MVP target view
+See also / 另见：`LANGUAGE.md`, `DESIGN.md`.
 
-### Phase 2 Features (Not Yet Implemented)
-- **Layer 3b: Runtime Trace** - Dynamic analysis with OpenTelemetry, Jaeger
-- **Layer 6: Interaction** - Change preview, heatmap overlay, violation highlight
-- **VIEW 02: Data Flow View** - Value transformation tracking
-- **VIEW 03: Event Flow View** - Event propagation tracking
-- **VIEW 05: Impact View** - Performance hotspots with runtime trace
-- **Cytoscape.js Visualization** - Interactive graph visualization
-- **VSCode Extension** - Full VSCode integration with FileSystemProvider
-- **chokidar File Watching** - Actual file watcher integration
-- **Joern CPG Integration** - Def-use chain inference using Joern
-- **ts-morph Integration** - TypeScript deep analysis
+## 1. How To Work After Reading / 读完后如何工作
 
-### Future Features (Phase 3)
-- **Layer 7: Generation** - Constrained code generation with LangGraph
-- **VIEW 06: Test View** - Test coverage, contract compliance, performance monitoring
+### Current Truth / 当前事实
 
-## Installation
+| EN | 中文 |
+| --- | --- |
+| Canonical design: `DESIGN.md` **20260704** | 现行设计：`DESIGN.md` **20260704** |
+| Primary shell: **VS Code extension** in `project/` | 主壳：`project/` 内 **VS Code 扩展** |
+| Core library + CLI share `src/core/analyze.ts` | 核心库与 CLI 共用 `src/core/analyze.ts` |
+| Test-first discipline | 测试先行 |
+| Do not revive old Python GUI/app | 勿恢复旧 Python GUI |
 
-### Prerequisites
+### Reading Order / 阅读顺序
 
-- Python 3.8 or higher
-- pip (Python package manager)
+When changing the project, read in this order:
 
-### Setup
+修改项目时，按这个顺序阅读：
 
-1. Clone the repository:
-```bash
-git clone <repository-url>
-cd lucid
-```
+1. `DESIGN.md`
+2. `project/PURPOSE.md`
+3. `project/RESEARCH.md`
+4. `project/ARCHITECTURE.md`
+5. `project/TASKS.md`
+6. `project/WORKFLOW.md`
 
-2. Create a virtual environment (recommended):
-```bash
-python -m venv .venv
-```
+### Working Order / 工作顺序
 
-3. Activate the virtual environment:
-```bash
-# Windows
-.venv\Scripts\activate
+**EN:** After reading the docs above, follow this loop:
 
-# Linux/Mac
-source .venv/bin/activate
-```
+**中文：** 读完上面的文档后，按下面的循环工作：
 
-4. Install dependencies:
-```bash
-cd project
-pip install -r requirements.txt
-```
+1. define or narrow the claim / 先定义或收窄功能承诺
+2. write or update tests first / 先写或更新测试
+3. update implementation / 再改实现
+4. run the relevant test slice / 跑对应测试
+5. run `npm test` before closing the change / 收尾前跑 `npm test`
 
-## Quick Start
+### Architecture Boundary / 架构边界
 
-### Analyze a Single File
+| Module | EN | 中文 |
+| --- | --- | --- |
+| `src/ingestion/` | Language detection, parsing, symbol/state discovery | 语言检测、解析、符号/state 发现 |
+| `src/analysis/` | Lucid IR: write/use/trigger contracts | Lucid IR：写/读/触发合约 |
+| `src/cli.ts` | Phase 0 CLI adapter | Phase 0 CLI 适配 |
+| `src/projection/` (planned) | View filter, cut, layout; Projection Slice | View 筛选、剪切、排版；Projection Slice |
+| `src/virtual/` (planned) | pull, push, fork, fold state, surface sync | 同步、折叠状态、呈现面 sync |
 
-```python
-from core.ingestion import parse_file
-from core.graph import build_code_graph
-from core.analysis import extract_access_contracts
-from core.views import DefUseView, StructureView
+**EN:** **Phase 0** = IR only (selection criteria). **Phase 1** = Views + Virtual Files together. Fork output stays in the **same file** (function) or **same directory** (file). **Rebind** only after **user confirmation** (including graph node actions).
 
-# Parse a Python file
-parsed = parse_file('path/to/your/file.py')
+**中文：** **Phase 0** = 仅 IR（选择标准）。**Phase 1** = Views 与 Virtual Files 一起做。Fork 产出在**同文件**（函数）或**同目录**（文件）。**重绑**仅在**用户确认**后（含图节点操作）。
 
-# Build the code graph
-graph = build_code_graph(parsed)
+**EN:** Finish Phase 0 multi-language def-use and stable spans before Phase 1 extension work unless `TASKS.md` says otherwise.
 
-# Extract access contracts
-contracts = extract_access_contracts(graph, parsed['source_code'])
+**中文：** 除非 `TASKS.md` 另有说明，先完成 Phase 0 多语言 def-use 与稳定 span，再做 Phase 1 扩展。
 
-# Create views
-def_use_view = DefUseView(contracts)
-structure_view = StructureView(graph)
+### Editing Rule / 编辑原则
 
-# View results
-print(structure_view.render_structure())
-print(def_use_view.render_summary())
-```
+**EN:** When design and code diverge, narrow the claim, write the test, then change the code.
 
-### Command Line Usage
+**中文：** 当设计与代码不一致时，先缩小承诺，再写测试，最后改代码。
 
-```bash
-# Analyze a file
-python -m core.cli analyze path/to/file.py
+## 2. How To Use What Exists / 读完后如何使用当前功能
 
-# Show structure
-python -m core.cli structure path/to/file.py
+### What Exists Today / 当前已有功能
 
-# Show def-use contracts
-python -m core.cli defuse path/to/file.py
-```
+| Feature | EN | 中文 |
+| --- | --- | --- |
+| CLI analysis | Analyze a single file and emit contract JSON | 分析单文件并输出 contract JSON |
+| TS/JS analyzer | Primary path using `ts-morph` | 基于 `ts-morph` 的主路径 |
+| Python fallback | Heuristic contract extraction | 启发式 Python contract 提取 |
+| C/C++ fallback | Heuristic contract extraction | 启发式 C/C++ contract 提取 |
+| Tests | Custom runner for parser, symbols, contracts, CLI | 自定义测试运行器覆盖解析、符号、合约与 CLI |
 
-## Core Concepts
+### Extension (Phase 1) / 扩展（Phase 1）
 
-### Layers
+**EN:** F5 in `project/` → open `examples/CartPanel.tsx` → **Lucid: Open Def-Use View** → pick state → graph + `lucid://` doc → edit → **Save Selected** or **Save All**.
 
-Lucid follows a layered architecture:
+**中文：** F5 → 打开 `examples/CartPanel.tsx` → **Lucid: Open Def-Use View** → 选 state → 图 + 虚拟文档 → 编辑 → 保存。
 
-1. **Ingestion Layer**: Code → AST, symbol table, import relations
-2. **Graph Layer**: In-memory graph with node and edge relationships
-3. **Analysis Layer**: Graph → access contracts, def-use chains
-4. **Virtual Layer**: Virtual file projection for safe editing
-5. **View Layer**: Visualization of analysis results
+| Command | EN | 中文 |
+| --- | --- | --- |
+| Open Def-Use View | Primary | 主流程 |
+| Save Selected / Save All | push overlay | 写回 |
+| Pull | Merge after real change | 合并 |
+| Toggle Fold | Fold functions | 折叠 |
+| Fork… | fork function/file | fork |
 
-### Node Types
+### Extension Dev / 扩展开发
 
-- **StateNode**: Represents state with access contract (variables)
-- **EventNode**: Event handlers/triggers
-- **FunctionNode**: Function/method
-- **ModuleNode**: Module/file
-- **ExternalEffectNode**: External side effects
+**EN:** Open `project/` in VS Code → F5 → Command Palette → `Lucid: Open Def-Use View`.
 
-### Edge Types
+**中文：** VS Code 打开 `project/` → F5 → `Lucid: Open Def-Use View`。
 
-- **defines**: Write site to state
-- **uses**: Use site to state
-- **triggers**: Event propagation
-- **depends_on**: Module dependency
-- **coupled_with**: Implicit coupling (inheritance, calls)
+### Basic Commands / 基本命令
 
-## API Reference
+Run from `project/`:
 
-### Ingestion Layer
-
-#### `parse_file(file_path: str) -> Dict[str, Any]`
-
-Parse a source file and extract its structure.
-
-**Parameters:**
-- `file_path`: Path to the source file
-
-**Returns:**
-- Dictionary containing:
-  - `language`: Detected programming language
-  - `file_path`: Original file path
-  - `source_code`: Raw source code
-  - `ast`: Tree-sitter AST (if available)
-  - `symbol_table`: Symbol table with definitions and scopes
-  - `import_relations`: Import relations
-  - `functions`: List of function definitions
-  - `classes`: List of class definitions
-  - `variables`: List of variable assignments
-  - `imports`: List of import statements
-
-**Example:**
-```python
-from core.ingestion import parse_file
-
-parsed = parse_file('example.py')
-print(f"Language: {parsed['language']}")
-print(f"Functions: {len(parsed['functions'])}")
-print(f"Symbol table: {parsed['symbol_table']}")
-```
-
-### Graph Layer
-
-#### `build_code_graph(parsed_data: Dict[str, Any]) -> CodeGraph`
-
-Build a code graph from parsed data.
-
-**Parameters:**
-- `parsed_data`: Output from `parse_file()`
-
-**Returns:**
-- `CodeGraph` object with nodes and edges
-
-**Example:**
-```python
-from core.ingestion import parse_file
-from core.graph import build_code_graph
-
-parsed = parse_file('example.py')
-graph = build_code_graph(parsed)
-
-# Get all functions
-functions = graph.get_functions()
-for func in functions:
-    print(f"Function: {func.name} at line {func.source_ref['line']}")
-
-# Get all states (variables)
-states = graph.get_states()
-for state in states:
-    print(f"State: {state.name}")
-```
-
-### Analysis Layer
-
-#### `extract_access_contracts(graph: CodeGraph, source_code: str) -> Dict[str, AccessContract]`
-
-Extract access contracts from the graph.
-
-**Parameters:**
-- `graph`: CodeGraph object
-- `source_code`: Source code string
-
-**Returns:**
-- Dictionary mapping variable names to AccessContract objects
-
-**Example:**
-```python
-from core.ingestion import parse_file
-from core.graph import build_code_graph
-from core.analysis import extract_access_contracts
-
-parsed = parse_file('example.py')
-graph = build_code_graph(parsed)
-contracts = extract_access_contracts(graph, parsed['source_code'])
-
-for var_name, contract in contracts.items():
-    print(f"{var_name}:")
-    print(f"  Writers: {len(contract.write_sites)}")
-    print(f"  Readers: {len(contract.use_sites)}")
-```
-
-#### `check_explicit_contract_violation(contract: AccessContract, allowed_writers: List[str], allowed_readers: List[str]) -> Dict[str, Any]`
-
-Check if an explicit contract is violated.
-
-**Parameters:**
-- `contract`: AccessContract to check
-- `allowed_writers`: List of allowed writer contexts
-- `allowed_readers`: List of allowed reader contexts
-
-**Returns:**
-- Violation report with violations found
-
-**Example:**
-```python
-from core.analysis.access_contract import check_explicit_contract_violation
-
-contract = contracts['my_variable']
-violation = check_explicit_contract_violation(
-    contract,
-    allowed_writers=['ModuleA', 'ModuleB'],
-    allowed_readers=['ModuleA', 'ModuleC']
-)
-
-if not violation['is_valid']:
-    print("Contract violations found:")
-    for v in violation['violations']:
-        print(f"  - {v['message']}")
-```
-
-#### `analyze_impact(state_name: str, contracts: Dict[str, AccessContract]) -> Dict[str, Any]`
-
-Analyze impact of changing a state variable.
-
-**Parameters:**
-- `state_name`: Name of the state being changed
-- `contracts`: All access contracts
-
-**Returns:**
-- Impact analysis showing affected readers
-
-**Example:**
-```python
-from core.analysis.access_contract import analyze_impact
-
-impact = analyze_impact('my_variable', contracts)
-print(f"Risk level: {impact['risk_level']}")
-print(f"Affected readers: {impact['readers']}")
-```
-
-### View Layer
-
-#### DefUseView (MVP)
-
-View for def-use contract analysis (VIEW 04 - MVP Target).
-
-**Methods:**
-- `get_variable_info(variable_name: str)`: Get information about a variable
-- `get_high_impact_variables(threshold: int = 5)`: Get variables with many readers
-- `get_write_only_variables()`: Get variables written but never read
-- `get_all_variables()`: Get all variable names
-
-**Example:**
-```python
-from core.views import DefUseView
-
-view = DefUseView(contracts)
-
-# Get variable info
-info = view.get_variable_info('my_variable')
-print(f"Risk level: {info['risk_level']}")
-print(f"Healthy: {info['is_healthy']}")
-
-# Get high impact variables
-high_impact = view.get_high_impact_variables(threshold=5)
-for var in high_impact:
-    print(f"{var['variable']}: {var['use_count']} uses")
-```
-
-#### StructureView (MVP)
-
-View for code structure (VIEW 01).
-
-**Methods:**
-- `get_function_list()`: Get all functions
-- `get_class_list()`: Get all classes
-- `get_variable_list()`: Get all variables
-- `get_module_list()`: Get all modules
-- `render_structure()`: Render structure as text
-
-**Example:**
-```python
-from core.views import StructureView
-
-view = StructureView(graph)
-
-# Get functions
-functions = view.get_function_list()
-for func in functions:
-    print(f"{func['name']} at line {func['line']}")
-
-# Render full structure
-print(view.render_structure())
-```
-
-#### DataFlowView (Phase 2 - Stub)
-
-View for data flow analysis (VIEW 02).
-
-**Status:** Stub implementation, not yet functional.
-
-#### EventFlowView (Phase 2 - Stub)
-
-View for event flow analysis (VIEW 03).
-
-**Status:** Stub implementation, not yet functional.
-
-#### ImpactView (Phase 2 - Stub)
-
-View for impact analysis and performance hotspots (VIEW 05).
-
-**Status:** Stub implementation, not yet functional.
-
-#### TestView (Phase 3 - Stub)
-
-View for test coverage and contract compliance (VIEW 06 - Generation Layer input).
-
-**Status:** Stub implementation, not yet functional.
-
-### Virtual Layer (MVP - Pattern Implementation)
-
-Manages virtual files for safe editing.
-
-**Note:** Currently implements the pattern from ARCHITECTURE (VSCode FileSystemProvider API, TextDocumentContentProvider, diff engine, chokidar pattern). Actual VSCode extension and chokidar integration are Phase 2 features.
-
-**Methods:**
-- `add_file(path: str, content: str, metadata: Optional[Dict] = None)`: Add a virtual file
-- `get_file(path: str)`: Get a virtual file
-- `get_modified_files()`: Get paths of modified files
-- `compute_all_diffs()`: Compute diffs for all modified files
-- `reset_all()`: Reset all virtual files to original content
-
-**Example:**
-```python
-from core.virtual_layer import VirtualFileSystem
-
-vfs = VirtualFileSystem()
-
-# Add a virtual file
-vfs.add_file('virtual.py', source_code)
-
-# Get the file and edit it
-vfile = vfs.get_file('virtual.py')
-vfile.apply_edit(new_content)
-
-# Compute diffs
-diffs = vfs.compute_all_diffs()
-for path, diff in diffs.items():
-    print(f"{path}:\n{diff}")
-```
-
-## Common Use Cases
-
-### 1. Find High-Impact Variables
-
-Identify variables that are used in many places (high risk to change):
-
-```python
-from core.ingestion import parse_file
-from core.graph import build_code_graph
-from core.analysis import extract_access_contracts
-from core.views import DefUseView
-
-parsed = parse_file('large_file.py')
-graph = build_code_graph(parsed)
-contracts = extract_access_contracts(graph, parsed['source_code'])
-view = DefUseView(contracts)
-
-high_impact = view.get_high_impact_variables(threshold=10)
-print("High-impact variables (10+ readers):")
-for var in high_impact:
-    print(f"  {var['variable']}: {var['use_count']} uses, risk={var['risk_level']}")
-```
-
-### 2. Detect Write-Only Variables
-
-Find variables that are written but never read (potential dead code):
-
-```python
-write_only = view.get_write_only_variables()
-print("Write-only variables (potential dead code):")
-for var in write_only:
-    print(f"  {var}")
-```
-
-### 3. Analyze Impact Before Changes
-
-See what will break if you modify a variable:
-
-```python
-from core.analysis.access_contract import analyze_impact
-
-impact = analyze_impact('important_state', contracts)
-print(f"Changing '{impact['state']}' will affect:")
-print(f"  - {impact['total_readers']} readers")
-print(f"  - Risk level: {impact['risk_level']}")
-print(f"  - Affected functions: {impact['affected_functions']}")
-```
-
-### 4. Check Contract Violations
-
-Enforce explicit access contracts:
-
-```python
-from core.analysis.access_contract import check_explicit_contract_violation
-
-# Define allowed writers for a critical state
-allowed_writers = ['AuthService', 'UserModule']
-allowed_readers = ['AuthService', 'UserModule', 'Logger']
-
-contract = contracts['user_token']
-violation = check_explicit_contract_violation(
-    contract,
-    allowed_writers,
-    allowed_readers
-)
-
-if not violation['is_valid']:
-    print("SECURITY VIOLATION DETECTED!")
-    for v in violation['violations']:
-        print(f"  {v['message']}")
-```
-
-### 5. Explore Code Structure
-
-Get an overview of the codebase:
-
-```python
-from core.ingestion import parse_file
-from core.graph import build_code_graph
-from core.views import StructureView
-
-parsed = parse_file('module.py')
-graph = build_code_graph(parsed)
-view = StructureView(graph)
-
-print(view.render_structure())
-```
-
-## Running Tests
-
-Run the test suite to verify installation:
+在 `project/` 目录下运行：
 
 ```bash
-cd project
-pytest
+npm install
+npm run compile
+npm test
+node ./out/cli.js analyze ./examples/CartPanel.tsx
 ```
 
-Run specific test modules:
+Filter one variable:
+
+按单个变量过滤：
 
 ```bash
-pytest tests/test_ingestion.py
-pytest tests/test_graph.py
-pytest tests/test_analysis.py
-pytest tests/test_virtual_layer.py
-pytest tests/test_views.py
+node ./out/cli.js analyze ./examples/CartPanel.tsx --variable cartTotal
 ```
 
-## Troubleshooting
+### Language Support / 语言支持
 
-### Import Errors
+| Language | EN | 中文 |
+| --- | --- | --- |
+| TS/JS | Primary path | 主路径 |
+| Python | Interim heuristics; Joern target per DESIGN | 过渡启发式；DESIGN 目标 Joern |
+| C/C++ | Interim heuristics; Joern target | 过渡启发式；目标 Joern |
+| Rust | Mapped to C++ pipeline per DESIGN | 按 DESIGN 映射 C++ 管线 |
 
-If you encounter import errors, make sure you're in the `project` directory:
+### Known Limits / 已知限制
 
-```bash
-cd project
-python your_script.py
+- **Phase 1** (Views, `lucid://`, pull/push/fork) is designed but not shipped / Phase 1 已设计未交付
+- Lucid IR today is CLI JSON only—not yet fed into Virtual Files / 当前 IR 仅 CLI JSON，尚未接入 Virtual File
+- Python/C++ use heuristic fallback until Joern integration / Python/C++ 为启发式降级，待 Joern
+- no cross-file workspace graph yet / 尚无跨文件工作区图
+- fork rebind is never automatic / fork 重绑绝不自动执行
+
+### Global Idea Hospice Install / 全局 Idea Hospice 安装
+
+**EN:** `idea-hospice` is installed globally for Cursor and is not vendored into this repo.
+
+**中文：** `idea-hospice` 已作为 Cursor 全局能力安装，不在本仓库内部维护。
+
+- skill: `C:/Users/q234zhan/.cursor/skills/idea-hospice/`
+- MCP: `C:/Users/q234zhan/.cursor/mcp.json`
+- Python dependency: `python -m pip install mcp`
+
+```json
+{
+  "mcpServers": {
+    "idea-hospice": {
+      "command": "python",
+      "args": [
+        "C:/Users/q234zhan/.cursor/skills/idea-hospice/scripts/mcp_server.py"
+      ],
+      "env": {
+        "IH_ROOT": "D:/10_projects/ideas"
+      }
+    }
+  }
+}
 ```
 
-Or add the project directory to Python path:
+**EN:** If Cursor does not show the MCP server, reload or restart Cursor.
 
-```python
-import sys
-sys.path.append('path/to/lucid/project')
-```
-
-### Tree-sitter Not Available
-
-If tree-sitter is not installed, the parser will fall back to regex-based parsing. For better accuracy, install tree-sitter:
-
-```bash
-pip install tree-sitter tree-sitter-languages
-```
-
-### Memory Issues with Large Files
-
-For very large files, consider:
-- Analyzing files individually instead of the entire codebase
-- Using the virtual layer to work with projections
-- Increasing system memory
-
-## Architecture Reference
-
-For detailed architecture information, see `ARCHITECTURE.html`.
-
-### Implementation Phases
-
-**MVP (Current):**
-- Single-file analysis
-- Text-based views
-- Pattern implementations (not actual VSCode/chokidar integration)
-- Custom def-use extraction (not Joern CPG)
-
-**Phase 2 (Future):**
-- Cross-file analysis
-- Runtime trace layer
-- Interactive features (change preview, heatmap, violation highlight)
-- Cytoscape.js visualization
-- Actual VSCode extension
-- Joern CPG integration
-- ts-morph integration
-- chokidar file watching
-
-**Phase 3 (Future):**
-- Generation layer with LangGraph
-- Test view with coverage tracking
-
-## License
-
-See LICENSE file for details.
-
-## Support
-
-For issues and questions, please refer to the project repository.
+**中文：** 如果 Cursor 没有显示这个 MCP server，请重载或重启 Cursor。

@@ -1,0 +1,7 @@
+{
+  "markdown.validate.enabled": false,
+  "markdownlint.run": "off",
+  "files.associations": {
+    "*.lucid-surface": "plaintext"
+  }
+}

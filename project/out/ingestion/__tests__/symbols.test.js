@@ -1,0 +1,197 @@
+"use strict";
+/**
+ * Tests for Task 1.2: Symbol table extraction
+ * Acceptance criteria:
+ * - detects all variable declarations (const, let, var)
+ * - detects useState() calls and extracts state name
+ * - records definition site (file, line, column)
+ */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.runTests = runTests;
+const fs = __importStar(require("fs"));
+const path = __importStar(require("path"));
+const symbols_1 = require("../symbols");
+// Test file paths
+const TEST_DIR = path.join(__dirname, 'fixtures');
+function setupTestFiles() {
+    if (!fs.existsSync(TEST_DIR)) {
+        fs.mkdirSync(TEST_DIR, { recursive: true });
+    }
+    // File with variable declarations
+    const variables = `
+const x: number = 42;
+let y: string = "hello";
+var z: boolean = true;
+const result = x + 1;
+`;
+    // File with useState calls
+    const useState = `
+import { useState } from 'react';
+
+function Component() {
+  const [count, setCount] = useState(0);
+  const [name, setName] = useState('');
+  
+  return <div>{count}</div>;
+}
+`;
+    // File with both
+    const mixed = `
+const x = 42;
+let y = "hello";
+
+function Component() {
+  const [count, setCount] = useState(0);
+  const result = count + 1;
+  return <div>{count}</div>;
+}
+`;
+    fs.writeFileSync(path.join(TEST_DIR, 'variables.ts'), variables);
+    fs.writeFileSync(path.join(TEST_DIR, 'usestate.tsx'), useState);
+    fs.writeFileSync(path.join(TEST_DIR, 'mixed.tsx'), mixed);
+}
+function cleanupTestFiles() {
+    if (fs.existsSync(TEST_DIR)) {
+        fs.rmSync(TEST_DIR, { recursive: true, force: true });
+    }
+}
+function runTests() {
+    console.log('Running Task 1.2 Tests...\n');
+    setupTestFiles();
+    let passed = 0;
+    let failed = 0;
+    // Test 1: Detects all variable declarations (const, let, var)
+    console.log('Test 1: Detects all variable declarations (const, let, var)');
+    try {
+        const symbolTable = (0, symbols_1.extractSymbolTable)(path.join(TEST_DIR, 'variables.ts'));
+        const constDecls = symbolTable.variables.filter(v => v.type === 'const');
+        const letDecls = symbolTable.variables.filter(v => v.type === 'let');
+        const varDecls = symbolTable.variables.filter(v => v.type === 'var');
+        if (constDecls.length >= 2 && letDecls.length >= 1 && varDecls.length >= 1) {
+            console.log('✓ PASSED: Detected const, let, and var declarations');
+            console.log(`  const: ${constDecls.length}, let: ${letDecls.length}, var: ${varDecls.length}`);
+            passed++;
+        }
+        else {
+            console.log('✗ FAILED: Missing some variable declaration types');
+            console.log(`  const: ${constDecls.length}, let: ${letDecls.length}, var: ${varDecls.length}`);
+            failed++;
+        }
+    }
+    catch (error) {
+        console.log('✗ FAILED: Variable declaration detection crashed');
+        failed++;
+    }
+    // Test 2: Detects useState() calls and extracts state name
+    console.log('\nTest 2: Detects useState() calls and extracts state name');
+    try {
+        const symbolTable = (0, symbols_1.extractSymbolTable)(path.join(TEST_DIR, 'usestate.tsx'));
+        const stateDecls = symbolTable.stateDeclarations;
+        if (stateDecls.length >= 2) {
+            const hasCount = stateDecls.some(s => s.name === 'count');
+            const hasName = stateDecls.some(s => s.name === 'name');
+            if (hasCount && hasName) {
+                console.log('✓ PASSED: Detected useState calls and extracted state names');
+                console.log(`  State names: ${stateDecls.map(s => s.name).join(', ')}`);
+                passed++;
+            }
+            else {
+                console.log('✗ FAILED: Missing expected state names');
+                console.log(`  State names: ${stateDecls.map(s => s.name).join(', ')}`);
+                failed++;
+            }
+        }
+        else {
+            console.log('✗ FAILED: Did not detect enough useState calls');
+            console.log(`  Found: ${stateDecls.length} state declarations`);
+            failed++;
+        }
+    }
+    catch (error) {
+        console.log('✗ FAILED: useState detection crashed');
+        failed++;
+    }
+    // Test 3: Records definition site (file, line, column)
+    console.log('\nTest 3: Records definition site (file, line, column)');
+    try {
+        const symbolTable = (0, symbols_1.extractSymbolTable)(path.join(TEST_DIR, 'variables.ts'));
+        const firstVar = symbolTable.variables[0];
+        if (firstVar &&
+            firstVar.file &&
+            typeof firstVar.line === 'number' &&
+            typeof firstVar.column === 'number') {
+            console.log('✓ PASSED: Definition site recorded with file, line, column');
+            console.log(`  Sample: ${firstVar.name} at ${firstVar.file}:${firstVar.line}:${firstVar.column}`);
+            passed++;
+        }
+        else {
+            console.log('✗ FAILED: Definition site missing required information');
+            failed++;
+        }
+    }
+    catch (error) {
+        console.log('✗ FAILED: Definition site recording crashed');
+        failed++;
+    }
+    // Test 4: Mixed file with both variables and useState
+    console.log('\nTest 4: Mixed file with both variables and useState');
+    try {
+        const symbolTable = (0, symbols_1.extractSymbolTable)(path.join(TEST_DIR, 'mixed.tsx'));
+        if (symbolTable.variables.length >= 3 && symbolTable.stateDeclarations.length >= 1) {
+            console.log('✓ PASSED: Handled mixed file correctly');
+            console.log(`  Total variables: ${symbolTable.variables.length}, State: ${symbolTable.stateDeclarations.length}`);
+            passed++;
+        }
+        else {
+            console.log('✗ FAILED: Mixed file handling incorrect');
+            console.log(`  Total variables: ${symbolTable.variables.length}, State: ${symbolTable.stateDeclarations.length}`);
+            failed++;
+        }
+    }
+    catch (error) {
+        console.log('✗ FAILED: Mixed file handling crashed');
+        failed++;
+    }
+    cleanupTestFiles();
+    console.log(`\n=== Test Results: ${passed} passed, ${failed} failed ===`);
+    return failed === 0;
+}
+// Run tests if executed directly
+if (require.main === module) {
+    const success = runTests();
+    process.exit(success ? 0 : 1);
+}
+//# sourceMappingURL=symbols.test.js.map
