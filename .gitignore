@@ -1,10 +1,7 @@
-# 先全部忽略
 *
 
-# 允许目录
 !project/
-
-# 允许文件
+ 
 !.gitignore
 !DESIGN.md
 !LANGUAGE.md
@@ -13,5 +10,4 @@
 !PROMPT.txt
 !run_verifiers.py
 
-# 允许目录内部递归
 !project/**
