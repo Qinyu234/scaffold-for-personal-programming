@@ -2,6 +2,39 @@
 /**
  * Cytoscape graph spec from Lucid IR / Projection Slice.
  */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.VIEW_GRAPH_BUILDERS = void 0;
 exports.graphFromEntryPointSlice = graphFromEntryPointSlice;
@@ -16,6 +49,7 @@ exports.graphImpactStub = graphImpactStub;
 exports.graphStructureStub = graphStructureStub;
 exports.graphEventFlowStub = graphEventFlowStub;
 exports.graphDataFlowStub = graphDataFlowStub;
+const path = __importStar(require("path"));
 const def_use_slice_1 = require("./def-use-slice");
 const data_flow_slice_1 = require("./data-flow-slice");
 const entry_point_slice_1 = require("./entry-point-slice");
@@ -113,15 +147,30 @@ function graphFromImpactSlice(slice) {
     }
     return { viewType: 'impact', scopeId: slice.scopeId, nodes, edges, layout: 'breadthfirst' };
 }
-function graphFromStructureSlice(slice) {
+function graphFromStructureSlice(slice, collapseLevel = 0) {
     const nodes = [];
     const edges = [];
     const modId = (0, structure_slice_1.moduleNodeId)(slice.moduleName);
-    nodes.push({ id: modId, label: slice.moduleName, kind: 'module' });
-    for (const span of slice.spans) {
-        const dep = (0, structure_slice_1.depNodeId)(span.variableName ?? 'unknown');
+    nodes.push({
+        id: modId,
+        label: slice.moduleName,
+        kind: 'module',
+        filePath: slice.focalFilePath,
+        hop: 0,
+    });
+    for (const member of slice.members) {
+        const dep = (0, structure_slice_1.depNodeId)(member.specifier);
         if (!nodes.find(n => n.id === dep)) {
-            nodes.push({ id: dep, label: span.variableName ?? 'dep', kind: 'module' });
+            const baseLabel = member.filePath
+                ? path.basename(member.filePath)
+                : member.specifier;
+            nodes.push({
+                id: dep,
+                label: baseLabel,
+                kind: member.filePath ? 'module' : 'import',
+                filePath: member.filePath ?? undefined,
+                hop: member.hop,
+            });
         }
     }
     for (const edge of slice.edges) {
@@ -132,7 +181,15 @@ function graphFromStructureSlice(slice) {
             label: edge.label,
         });
     }
-    return { viewType: 'structure', scopeId: slice.scopeId, nodes, edges, layout: 'breadthfirst' };
+    return {
+        viewType: 'structure',
+        scopeId: slice.scopeId,
+        nodes,
+        edges,
+        layout: 'breadthfirst',
+        collapseLevel,
+        tier: 'aggregation',
+    };
 }
 function graphFromDataFlowSlice(slice) {
     const nodes = [];

@@ -227,6 +227,7 @@ function createStructureSession(sourceFilePath, workspaceRoot) {
         pulledSnapshot: document.text,
         collapsedFunctions: collapsed,
         selectedSegmentIds: new Set(),
+        collapseLevel: 0,
         lineage: {
             virtualUri: `lucid://view/structure/${slice.scopeId}`,
             sourceFile: path.resolve(sourceFilePath),

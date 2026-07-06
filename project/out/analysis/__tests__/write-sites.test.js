@@ -44,13 +44,11 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.runTests = runTests;
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
+const temp_dir_1 = require("../../__tests__/temp-dir");
 const write_sites_1 = require("../write-sites");
-// Test file paths
-const TEST_DIR = path.join(__dirname, 'fixtures');
+let TEST_DIR = '';
 function setupTestFiles() {
-    if (!fs.existsSync(TEST_DIR)) {
-        fs.mkdirSync(TEST_DIR, { recursive: true });
-    }
+    TEST_DIR = (0, temp_dir_1.createTempDir)('write-sites');
     // File with assignments
     const assignments = `
 const x = 42;  // declaration, should be skipped
@@ -87,9 +85,8 @@ x = 30;  // mutation in module, should be found
     fs.writeFileSync(path.join(TEST_DIR, 'function-assignments.ts'), functionAssignments);
 }
 function cleanupTestFiles() {
-    if (fs.existsSync(TEST_DIR)) {
-        fs.rmSync(TEST_DIR, { recursive: true, force: true });
-    }
+    (0, temp_dir_1.removeTempDir)(TEST_DIR);
+    TEST_DIR = '';
 }
 function runTests() {
     console.log('Running Task 1.3 Tests...\n');

@@ -39,6 +39,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.runTests = runTests;
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
+const temp_dir_1 = require("../../__tests__/temp-dir");
 const layout_1 = require("../layout");
 const def_use_slice_1 = require("../../projection/def-use-slice");
 const session_1 = require("../session");
@@ -46,9 +47,11 @@ const push_1 = require("../push");
 const fork_1 = require("../fork");
 const extract_1 = require("../extract");
 const fold_store_1 = require("../fold-store");
-const FIX = path.join(__dirname, 'fixtures');
-const WS = path.join(FIX, 'ws');
+let FIX = '';
+let WS = '';
 function setup() {
+    FIX = (0, temp_dir_1.createTempDir)('virtual');
+    WS = path.join(FIX, 'ws');
     fs.mkdirSync(WS, { recursive: true });
     const src = `function demo() {
   let count = 0;
@@ -64,9 +67,9 @@ function setup() {
     fs.writeFileSync(path.join(FIX, 'push.ts'), src);
 }
 function cleanup() {
-    if (fs.existsSync(FIX)) {
-        fs.rmSync(FIX, { recursive: true, force: true });
-    }
+    (0, temp_dir_1.removeTempDir)(FIX);
+    FIX = '';
+    WS = '';
 }
 function runTests() {
     console.log('Running Virtual Layer Tests...\n');

@@ -39,14 +39,15 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.runTests = runTests;
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
+const temp_dir_1 = require("../../__tests__/temp-dir");
 const impact_slice_1 = require("../impact-slice");
 const graph_1 = require("../graph");
 const layout_1 = require("../../virtual/layout");
 const session_1 = require("../../virtual/session");
 const push_1 = require("../../virtual/push");
-const FIX = path.join(__dirname, 'fixtures');
+let FIX = '';
 function setup() {
-    fs.mkdirSync(FIX, { recursive: true });
+    FIX = (0, temp_dir_1.createTempDir)('impact');
     fs.writeFileSync(path.join(FIX, 'impact.tsx'), `import { useState } from 'react';
 
 export function Panel() {
@@ -58,9 +59,8 @@ export function Panel() {
 `);
 }
 function cleanup() {
-    if (fs.existsSync(FIX)) {
-        fs.rmSync(FIX, { recursive: true, force: true });
-    }
+    (0, temp_dir_1.removeTempDir)(FIX);
+    FIX = '';
 }
 function runTests() {
     console.log('Running Impact Slice Tests...\n');

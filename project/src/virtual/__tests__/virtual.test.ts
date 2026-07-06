@@ -4,6 +4,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { createTempDir, removeTempDir } from '../../__tests__/temp-dir';
 import { layoutDefUseDocument } from '../layout';
 import { buildDefUseSlice } from '../../projection/def-use-slice';
 import { createDefUseSession, pullSession } from '../session';
@@ -12,10 +13,12 @@ import { forkFunctionInFile, suggestForkName } from '../fork';
 import { readSourceLines } from '../extract';
 import { saveFoldState } from '../fold-store';
 
-const FIX = path.join(__dirname, 'fixtures');
-const WS = path.join(FIX, 'ws');
+let FIX = '';
+let WS = '';
 
 function setup() {
+  FIX = createTempDir('virtual');
+  WS = path.join(FIX, 'ws');
   fs.mkdirSync(WS, { recursive: true });
   const src = `function demo() {
   let count = 0;
@@ -32,9 +35,9 @@ function setup() {
 }
 
 function cleanup() {
-  if (fs.existsSync(FIX)) {
-    fs.rmSync(FIX, { recursive: true, force: true });
-  }
+  removeTempDir(FIX);
+  FIX = '';
+  WS = '';
 }
 
 export function runTests(): boolean {

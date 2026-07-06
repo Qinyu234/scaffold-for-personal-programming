@@ -1,6 +1,6 @@
 "use strict";
 /**
- * Tests for Structure View — DESIGN.md Phase 1.
+ * Tests for relative import resolution (tier-1 cluster).
  */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
@@ -40,25 +40,15 @@ exports.runTests = runTests;
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const temp_dir_1 = require("../../__tests__/temp-dir");
+const import_resolve_1 = require("../import-resolve");
 const structure_slice_1 = require("../structure-slice");
-const graph_1 = require("../graph");
-const layout_1 = require("../../virtual/layout");
-const session_1 = require("../../virtual/session");
 let FIX = '';
 function setup() {
-    FIX = (0, temp_dir_1.createTempDir)('structure');
-    fs.writeFileSync(path.join(FIX, 'module.tsx'), `import { useState } from 'react';
-import path from 'path';
-
-export function Module() {
-  const [x, setX] = useState(0);
-  return x;
-}
-`);
-    fs.writeFileSync(path.join(FIX, 'sample.py'), `import os
-from collections import Counter
-
-total = 0
+    FIX = (0, temp_dir_1.createTempDir)('import-resolve');
+    fs.mkdirSync(path.join(FIX, 'shared'), { recursive: true });
+    fs.writeFileSync(path.join(FIX, 'shared', 'counter.ts'), 'export let n = 0;\n');
+    fs.writeFileSync(path.join(FIX, 'main.ts'), `import { n } from './shared/counter';
+export function run() { return n; }
 `);
 }
 function cleanup() {
@@ -66,16 +56,31 @@ function cleanup() {
     FIX = '';
 }
 function runTests() {
-    console.log('Running Structure Slice Tests...\n');
+    console.log('Running Import Resolve Tests...\n');
     setup();
     let passed = 0;
     let failed = 0;
-    const tsPath = path.join(FIX, 'module.tsx');
-    const pyPath = path.join(FIX, 'sample.py');
-    console.log('Test 1: TS structure slice captures react import');
+    const main = path.join(FIX, 'main.ts');
+    const counter = path.join(FIX, 'shared', 'counter.ts');
+    console.log('Test 1: resolveImportPath finds local file');
     try {
-        const slice = (0, structure_slice_1.buildStructureSlice)(tsPath);
-        if (slice && slice.spans.some(s => s.variableName === 'react')) {
+        const resolved = (0, import_resolve_1.resolveImportPath)(main, './shared/counter');
+        if (resolved === path.normalize(counter)) {
+            console.log('✓ PASSED');
+            passed++;
+        }
+        else {
+            console.log('✗ FAILED', resolved);
+            failed++;
+        }
+    }
+    catch {
+        console.log('✗ FAILED');
+        failed++;
+    }
+    console.log('\nTest 2: package import returns null');
+    try {
+        if ((0, import_resolve_1.resolveImportPath)(main, 'react') === null) {
             console.log('✓ PASSED');
             passed++;
         }
@@ -88,58 +93,11 @@ function runTests() {
         console.log('✗ FAILED');
         failed++;
     }
-    console.log('\nTest 2: graph has imports edge');
+    console.log('\nTest 3: structure slice lists resolved member');
     try {
-        const graph = (0, graph_1.graphFromStructureSlice)((0, structure_slice_1.buildStructureSlice)(tsPath));
-        if (graph.edges.some(e => e.label === 'imports')) {
-            console.log('✓ PASSED');
-            passed++;
-        }
-        else {
-            console.log('✗ FAILED');
-            failed++;
-        }
-    }
-    catch {
-        console.log('✗ FAILED');
-        failed++;
-    }
-    console.log('\nTest 3: layout lists module imports');
-    try {
-        const doc = (0, layout_1.layoutStructureDocument)((0, structure_slice_1.buildStructureSlice)(tsPath), tsPath, new Set());
-        if (doc.text.includes('structure view: module') && doc.text.includes('imports')) {
-            console.log('✓ PASSED');
-            passed++;
-        }
-        else {
-            console.log('✗ FAILED');
-            failed++;
-        }
-    }
-    catch {
-        console.log('✗ FAILED');
-        failed++;
-    }
-    console.log('\nTest 4: Python structure slice captures from-import');
-    try {
-        const slice = (0, structure_slice_1.buildStructureSlice)(pyPath);
-        if (slice && slice.spans.some(s => s.variableName === 'collections')) {
-            console.log('✓ PASSED');
-            passed++;
-        }
-        else {
-            console.log('✗ FAILED');
-            failed++;
-        }
-    }
-    catch {
-        console.log('✗ FAILED');
-        failed++;
-    }
-    console.log('\nTest 5: session uses lucid://view/structure URI');
-    try {
-        const session = (0, session_1.createStructureSession)(tsPath, FIX);
-        if (session.lineage.virtualUri.startsWith('lucid://view/structure/module')) {
+        const slice = (0, structure_slice_1.buildStructureSlice)(main);
+        const member = slice.members.find(m => m.specifier === './shared/counter');
+        if (slice.focalFilePath === path.normalize(main) && member?.filePath === path.normalize(counter)) {
             console.log('✓ PASSED');
             passed++;
         }
@@ -153,10 +111,10 @@ function runTests() {
         failed++;
     }
     cleanup();
-    console.log(`\n=== Structure Slice Tests: ${passed} passed, ${failed} failed ===`);
+    console.log(`\n=== Import Resolve Tests: ${passed} passed, ${failed} failed ===`);
     return failed === 0;
 }
 if (require.main === module) {
     process.exit(runTests() ? 0 : 1);
 }
-//# sourceMappingURL=structure-slice.test.js.map
+//# sourceMappingURL=import-resolve.test.js.map

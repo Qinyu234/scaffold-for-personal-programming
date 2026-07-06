@@ -1,14 +1,13 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
+import { createTempDir, removeTempDir } from './temp-dir';
 import { buildContracts } from '../analysis/contract';
 
-const TEST_DIR = path.join(__dirname, 'fixtures');
+let TEST_DIR = '';
 
 function setupTestFiles() {
-  if (!fs.existsSync(TEST_DIR)) {
-    fs.mkdirSync(TEST_DIR, { recursive: true });
-  }
+  TEST_DIR = createTempDir('cli');
 
   // React component with multiple states and triggers
   const reactCode = `
@@ -41,9 +40,8 @@ export function Cart() {
 }
 
 function cleanupTestFiles() {
-  if (fs.existsSync(TEST_DIR)) {
-    fs.rmSync(TEST_DIR, { recursive: true, force: true });
-  }
+  removeTempDir(TEST_DIR);
+  TEST_DIR = '';
 }
 
 function runTests(): boolean {

@@ -154,6 +154,65 @@ View = (Filter, Cut, Layout, PatchPolicy)
 
 **中文：** 「选要看什么」**就是**筛选、剪切、拼接——不是打开更多原始文件。
 
+### Navigation model / 导航模型（**20260705**）
+
+**EN:** **Default entry = file anchor (B).** Semantic analysis (A) opens **after** the user picks a target from the cluster—not as the first question.
+
+**中文：** **默认入口 = 文件锚点（B）。** 语义分析（A）在用户从聚合结果里**选中对象之后**再打开——不是第一步就问 state/函数名。
+
+```
+Active file（焦点文件）
+    ↓  Aggregation View（文件怎么聚在一起）
+Cluster graph / list（相关文件集合；collapse 滑块控密度）
+    ↓  user selects file · function · state · …
+Semantic Lens（Def-Use · Entry Point · Data Flow · …）
+    ↓  filter + cut → Projection Slice
+Graph + Virtual File（分析界面）
+```
+
+| Tier / 层 | Anchor / 锚点 | EN | 中文 |
+| --- | --- | --- | --- |
+| **1 — Aggregation** | **Focal file** | Which files belong together | 哪些文件算「相关」 |
+| **2 — Semantic lens** | User selection inside cluster | Which spans matter for this question | 选中后切哪些 span 做分析 |
+
+**EN:** Phase 1 shipped six **semantic lenses** with direct commands (`lucid.openDefUse`, …). **UX (20260705):** **`lucid.open`** = focal file → dependency cluster (Structure + resolved 1-hop imports) → **Analyze…** drill-in to lens; tier-1 **Co-change** / **Manual cluster** planned.
+
+**中文：** Phase 1 六个 **semantic lens** 已通过命令直达。**UX（20260705）：** **`lucid.open`** = 焦点文件 → 依赖 cluster（Structure + 1-hop 解析）→ **Analyze…** drill-in；第一层 **Co-change** / **Manual cluster** 计划中。
+
+### Aggregation signals / 聚合信号
+
+**EN:** Each **Aggregation View** = one primary signal (or declared combination). Manual overrides automatic edges. Signal priority: **manual > import/reference > co-change > naming/path boost**.
+
+**中文：** 每个 **Aggregation View** = 一种主信号（或声明的组合）。手动分组覆盖自动边。优先级：**手动 > 引用 > 共改 > 命名/路径加分**。
+
+| Priority | Signal / 信号 | Reliability | EN | 中文 |
+| --- | --- | --- | --- | --- |
+| 4 | **Manual cluster** | Highest | User tags / fold groups | 用户标签；始终覆盖自动 |
+| 1 | **Explicit reference** | Highest auto | import · require · use | 几乎无假阳性；漏掉无代码依赖的概念相关 |
+| 2 | **Co-change** | Medium | git log co-occurrence | 补 import 漏掉的「一起改」关系 |
+| 3 | **Naming / path** | Weak | shared prefix, same dir | 次要加分，非主 Filter |
+
+**EN:** View names should state the signal (“Dependency”, “Co-change”, “Manual”) so users know what each view **will not** show.
+
+**中文：** View 名应对应信号（「依赖」「共改」「手动」），边界一目了然（如依赖 View 不承诺历史上共改的文件）。
+
+### Collapse / 折叠密度（orthogonal to aggregation）
+
+**EN:** **Collapse controls display density, not slice membership.** Slice = full cluster; collapse = how much of each member is visible. User-adjustable **level 0–3** (reversible slider)—not a single “correct” auto threshold. Phase 3 RPCM auto-compress, if any, is **suggestion only**; default stays manual + slider.
+
+**中文：** **Collapse 管露出多少，不决定 slice 成员。** Slice = 聚合全集；collapse = 每个成员露出多少。用户可调 **0–3 级**（可逆滑块）——无唯一「正确」阈值。Phase 3 RPCM 自动压缩若有，仅作**建议**；默认仍为手动 + 滑块。
+
+| Dimension / 维度 | EN | 中文 |
+| --- | --- | --- |
+| **Graph distance** | Hops from focal file on aggregation graph | 从焦点文件在聚合图上的跳数 |
+| **Size / complexity** | Small re-exports fold more aggressively | 小文件可更激进折叠 |
+| **Recency** | Recently edited → default expanded | 最近编辑默认展开（排序倾向） |
+| **Manual fold** | Per-function / per-block; overrides auto | 函数/块级手动；覆盖自动 |
+
+**EN:** Function-level fold (Phase 1) persists under `.lucid/state/{scopeId}/`; cluster-level collapse level persists per aggregation session.
+
+**中文：** 函数级 fold（Phase 1）存 `.lucid/state/{scopeId}/`；cluster 级 collapse 级别按聚合会话持久化。
+
 ### Surfaces / 两种呈现面
 
 | Surface | EN | 中文 |
@@ -211,9 +270,13 @@ Same selection anchor and Projection Slice; different renderers. / 同一选择�
 
 ### Scope Identity / 选择对象（scopeId）
 
-**EN:** `scopeId` is the **selected object**—for Def-Use View, the **state name** (e.g. `items`, `cartTotal`). Storage paths use the same name: `.lucid/state/items/…`. Entry Point uses function name; other views use their anchor id.
+**EN:** **`scopeId` depends on tier.** Tier-1 aggregation: **focal file path** or module stem (e.g. `CartPanel`). Tier-2 semantic lens: anchor inside selection—state name (`items`), function name, data name, etc. Storage paths follow the active tier (e.g. `.lucid/state/items/…` for Def-Use drill-in).
 
-**中文：** `scopeId` = **选择对象**——Def-Use 下为 **state 名**（如 `items`、`cartTotal`）。存储路径同名：`.lucid/state/items/…`。Entry Point 用函数名；其他 View 用各自锚点 id。
+**中文：** **`scopeId` 随层级而变。** 第一层聚合：**焦点文件路径**或模块 stem（如 `CartPanel`）。第二层 semantic lens：选中对象内的锚点——state 名（`items`）、函数名、data 名等。存储路径随当前层（如 Def-Use drill-in 用 `.lucid/state/items/…`）。
+
+**EN (legacy Phase 1 commands):** Direct `lucid.openDefUse` etc. still take semantic `scopeId` first; default UX will start from focal file instead.
+
+**中文（Phase 1 命令遗留）：** 直达 `lucid.openDefUse` 等仍先问 semantic `scopeId`；默认 UX 将改为从焦点文件起步。
 
 ### Data Type Model (strong) / 数据类型（强分类）
 
@@ -395,18 +458,23 @@ Internal structures include / 内部结构包括：
 
 ## Views (Phase 1) / 视图（Phase 1）
 
-**EN:** Phase 1 ships **all Views at minimum viable depth**—wire up existing tools, simplest integration each. Not full feature parity per view. Virtual File push: **`save_selected` / `save_all`**; **scope = single file or single function** for now (no multi-file patch).
+**EN:** Phase 1 ships **semantic lenses** at minimum viable depth. **Navigation target (20260705):** focal file → aggregation cluster → drill-in to lens. Commands below remain tier-2 shortcuts until UI is re-homed.
 
-**中文：** Phase 1 **各 View 做最小可用**——把现有工具找齐、每项最简单集成。非全功能对等。Virtual File push：**`save_selected` / `save_all`**；**范围暂限单文件或单函数**（不多文件 patch）。
+**中文：** Phase 1 交付 **semantic lens** 最小可用。**导航目标（20260705）：** 焦点文件 → 聚合 cluster → drill-in 到 lens。下表命令暂为第二层快捷方式，待 UI 归位。
 
-| View | Tool (minimal) | Phase 1 depth | Status (20260703) |
-| --- | --- | --- | --- |
-| Def-Use | ts-morph / Joern | graph + VF + push | **Shipped** (JS/TS) |
-| Data Flow | length+interpretation edges | graph + VF + push | **Shipped** (Python) |
-| Entry Point | ts-morph call tree, cytoscape breadthfirst | graph + VF + push | **Shipped** (JS/TS) |
-| Impact | IR propagation | graph + VF + push | **Shipped** |
-| Structure | ts-morph / Python imports | graph + VF + push | **Shipped** |
-| Event Flow | static triggers | graph + VF + push | **Shipped** (JS/TS) |
+| View | Tier | Tool (minimal) | Phase 1 depth | Status (20260703) |
+| --- | --- | --- | --- | --- |
+| **Structure** | **1 — Aggregation** | ts-morph / Python imports | graph + VF + push | **Shipped** |
+| Def-Use | 2 — Semantic | ts-morph / Joern | graph + VF + push | **Shipped** (JS/TS) |
+| Data Flow | 2 — Semantic | length+interpretation edges | graph + VF + push | **Shipped** (Python) |
+| Entry Point | 2 — Semantic | ts-morph call tree | graph + VF + push | **Shipped** (JS/TS) |
+| Impact | 2 — Semantic | IR propagation | graph + VF + push | **Shipped** |
+| Event Flow | 2 — Semantic | static triggers | graph + VF + push | **Shipped** (JS/TS) |
+
+| Planned aggregation / 计划聚合 | Signal | Phase |
+| --- | --- | --- |
+| **Co-change** | git log co-occurrence | 2.5+ |
+| **Manual cluster** | user tags | 2.5+ |
 
 **EN:** Push (`save_selected` / `save_all`) on **single file or function** only in Phase 1.
 
@@ -416,9 +484,9 @@ Internal structures include / 内部结构包括：
 
 **中文：** **JS（含 TS）**：Def-Use、Event Flow、**Entry Point**（React/前端）。**Python**：**Data Flow**（强类型）。两者 UI 完成度同级。
 
-**Interaction / 交互:** drill-in + breadcrumb; cognitive budget (7); manual fold under `.lucid/state/{stateName}/`; Familiarity deferred.
+**Interaction / 交互:** focal file → aggregation → drill-in to lens; breadcrumb back to cluster; collapse slider 0–3; manual fold under `.lucid/state/{scopeId}/`; Familiarity deferred.
 
-**交互：** 钻入与面包屑；认知预算 7；折叠存 `.lucid/state/{stateName}/`；Familiarity 延后。
+**交互：** 焦点文件 → 聚合 → drill-in 到 lens；面包屑回到 cluster；collapse 滑块 0–3；折叠存 `.lucid/state/{scopeId}/`；Familiarity 延后。
 
 ---
 
@@ -510,7 +578,7 @@ lucid analyze Cart.tsx
 
 ### Phase 3 — RPCM + Prevention + Lowering / RPCM、预防、降级
 
-- **Cognitive WS (RPCM):** automated Load/Mutate/Compress, collapse prediction, adaptive projection (`thoughts/recognition_matrix.md`)
+- **Cognitive WS (RPCM):** optional Load/Mutate/Compress **suggestions**; collapse default stays user slider + manual fold (`thoughts/recognition_matrix.md`)
 - `explicit` contract enforcement on push
 - View thrashing signals → block or warn on save
 - Lucid IR → MLIR (research path for IR tooling; **separate from C++→ASM**)

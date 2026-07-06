@@ -38,12 +38,14 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.buildStructureSlice = buildStructureSlice;
+exports.filePathForStructureNode = filePathForStructureNode;
 exports.moduleNodeId = moduleNodeId;
 exports.depNodeId = depNodeId;
 const path = __importStar(require("path"));
 const fs = __importStar(require("fs"));
 const ts_morph_1 = require("ts-morph");
 const language_1 = require("../ingestion/language");
+const import_resolve_1 = require("./import-resolve");
 const PY_IMPORT = /^\s*(?:import\s+([\w.]+)|from\s+([\w.]+)\s+import)/;
 function moduleStem(filePath) {
     return path.basename(filePath, path.extname(filePath));
@@ -53,10 +55,13 @@ function buildJsImports(filePath, moduleName) {
     const sourceFile = project.addSourceFileAtPath(filePath);
     const spans = [];
     const edges = [];
+    const members = [];
     const modId = `mod:${moduleName}`;
     for (const imp of sourceFile.getImportDeclarations()) {
         const specifier = imp.getModuleSpecifierValue();
         const line = imp.getStartLineNumber();
+        const resolved = (0, import_resolve_1.resolveImportPath)(filePath, specifier);
+        members.push({ specifier, filePath: resolved, hop: 1 });
         spans.push({
             file: filePath,
             line,
@@ -67,16 +72,17 @@ function buildJsImports(filePath, moduleName) {
         });
         edges.push({
             source: modId,
-            target: `dep:${specifier}`,
+            target: depNodeId(specifier),
             label: 'imports',
         });
     }
-    return { spans, edges };
+    return { spans, edges, members };
 }
 function buildPythonImports(filePath, moduleName) {
     const lines = fs.readFileSync(filePath, 'utf8').split(/\r?\n/);
     const spans = [];
     const edges = [];
+    const members = [];
     const modId = `mod:${moduleName}`;
     lines.forEach((raw, index) => {
         const match = PY_IMPORT.exec(raw);
@@ -85,6 +91,8 @@ function buildPythonImports(filePath, moduleName) {
         }
         const specifier = match[1] ?? match[2];
         const line = index + 1;
+        const resolved = (0, import_resolve_1.resolveImportPath)(filePath, specifier.replace(/\./g, '/'));
+        members.push({ specifier, filePath: resolved, hop: 1 });
         spans.push({
             file: filePath,
             line,
@@ -95,11 +103,11 @@ function buildPythonImports(filePath, moduleName) {
         });
         edges.push({
             source: modId,
-            target: `dep:${specifier}`,
+            target: depNodeId(specifier),
             label: 'imports',
         });
     });
-    return { spans, edges };
+    return { spans, edges, members };
 }
 function buildStructureSlice(filePath) {
     const lang = (0, language_1.detectLanguage)(filePath);
@@ -112,9 +120,21 @@ function buildStructureSlice(filePath) {
         viewType: 'structure',
         scopeId: moduleName,
         moduleName,
+        focalFilePath: path.resolve(filePath),
+        members: built.members,
         spans: built.spans,
         edges: built.edges,
     };
+}
+function filePathForStructureNode(nodeId, slice) {
+    if (nodeId === moduleNodeId(slice.moduleName)) {
+        return slice.focalFilePath;
+    }
+    if (!nodeId.startsWith('dep:')) {
+        return null;
+    }
+    const specifier = nodeId.slice(4);
+    return slice.members.find(m => m.specifier === specifier)?.filePath ?? null;
 }
 function moduleNodeId(moduleName) {
     return `mod:${moduleName}`;

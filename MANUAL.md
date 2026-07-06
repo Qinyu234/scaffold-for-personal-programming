@@ -16,7 +16,21 @@ See also / 另见：`LANGUAGE.md`, `DESIGN.md`.
 | Primary shell: **VS Code extension** in `project/` | 主壳：`project/` 内 **VS Code 扩展** |
 | Core library + CLI share `src/core/analyze.ts` | 核心库与 CLI 共用 `src/core/analyze.ts` |
 | Test-first discipline | 测试先行 |
+| Full dev stack skill | `resume/skills/packages/project-init.skill` + `coding-workflow` + `lucid-workflow` |
+| Runtime | **Node/npm** in `lucid/project/`（1 种运行时 → 不用 Docker / 不用 Python venv） |
 | Do not revive old Python GUI/app | 勿恢复旧 Python GUI |
+
+### Runtime / 环境（与 coding-workflow 同步）
+
+| EN | 中文 |
+| --- | --- |
+| Lucid **build/runtime** = **TypeScript/Node** only (`lucid/project/`) | 构建/运行 = **TS/Node**，在 `lucid/project/` |
+| Commands: `npm install`, `npm run compile`, `npm test` — **from `lucid/project/`** | 命令均在 **`lucid/project/`** 执行 |
+| **No** `.venv` in this repo; Python in examples is **analyzed**, not Lucid's runtime | 本仓库**无** Python venv；examples 里 Python 是被分析对象 |
+| **≥3 runtime languages** → Docker per `coding-workflow`; Lucid today = **1 language** → **no Docker** | 三语及以上才 Docker；Lucid 当前单语 → 不用 Docker |
+| Target repos you analyze may use their own venv/Docker — Lucid F5 does not replace them | 被分析的目标项目自有 venv/Docker，与 Lucid 扩展分离 |
+
+See `runtime.json` at repo root. Python-side projects (e.g. novel-qola): **`.venv` + py-3.11** per same rules.
 
 ### Reading Order / 阅读顺序
 
@@ -88,8 +102,54 @@ When changing the project, read in this order:
 
 **中文：** F5 后：JS/TS 用 Def-Use（Pull 可刷新跨文件）；Python 用 Data Flow 或 Translation。
 
+### Use on your target repo / 对目标项目使用
+
+**EN:** Lucid is **not installed from Marketplace yet**. You run the extension via **F5 debug**, then work on **your codebase** in the **Extension Development Host** window — not in the `lucid/project` window where you pressed F5.
+
+**中文：** 扩展**尚未上架**。用 **F5 调试**启动后，在弹出的 **Extension Development Host** 窗口里打开**你的目标项目**，对着目标文件用命令；不是在按 F5 的那个 `lucid/project` 窗口里分析 `examples/`。
+
+**Steps / 步骤**
+
+1. **Prepare once** — in `lucid/project/`: `npm install` → `npm run compile`
+2. **VS Code** open folder **`lucid/project/`** (Lucid 源码)
+3. **Run → Start Debugging (F5)** → a **new window** opens (title bar says `[Extension Development Host]`)
+4. In **that new window**: **File → Open Folder…** → select **your target repo** (e.g. `D:/10_projects/my-app`)
+5. Open a **target source file** in the editor (make it the active tab)
+6. **Ctrl+Shift+P** → run a Lucid command, e.g.:
+   - Any supported file → **Lucid: Open (dependency cluster)** — default entry; graph shows imports + resolved local files; **Analyze…** drill-in to Def-Use / Entry Point / …
+   - TS/JS (direct lens) → **Lucid: Open Def-Use View** → pick a state name
+   - Python (direct lens) → **Lucid: Open Data Flow View (Python)** → pick a variable
+7. Lucid opens a **graph** + **`lucid://…` virtual document** beside your real file. Edit VF → **Lucid: Save Selected / Save All** writes back to the **real file**.
+
+**Which file is analyzed? / 分析哪个文件？**
+
+| Rule | 说明 |
+| --- | --- |
+| Commands use the **currently active editor tab** | 命令针对**当前激活**的编辑器标签页 |
+| Put the cursor in the target file before Ctrl+Shift+P | 先点开目标文件，再开命令面板 |
+| Cross-file / `.lucid/trace.json` use **workspace root** = folder you opened in step 4 | 跨文件、trace 路径以**目标项目根目录**为准 |
+
+**Quick map / 文件类型 → 命令**
+
+| Target file | Command |
+| --- | --- |
+| `.ts` / `.tsx` / `.js` / `.py` | **Open (dependency cluster)** — default; then **Analyze…** on a node |
+| `.ts` / `.tsx` / `.js` | Open Def-Use / Entry Point / Event Flow / Impact (direct lens) |
+| `.py` | Open Data Flow / Impact / Translation (direct lens) |
+| Any open VF session | Load Trace Overlay; Put trace at `<target-root>/.lucid/trace.json` |
+
+**CLI without UI / 不用 UI 时**
+
+Analyze any file path from terminal (still run from `lucid/project/`):
+
+```bash
+node ./out/cli.js analyze D:/path/to/your/file.tsx
+node ./out/cli.js analyze D:/path/to/your/file.py --variable myVar
+```
+
 | Command | EN | 中文 |
 | --- | --- | --- |
+| **Open (dependency cluster)** | focal file → import cluster; collapse slider; Analyze… drill-in | **默认入口**：依赖聚合 → drill-in 语义 lens |
 | Open Event Flow View (JS/TS) | event → state E2E | JS/TS 事件流 |
 | Open Entry Point View (JS/TS) | call tree E2E | JS/TS 调用树 |
 | Open Def-Use View | JS/TS state E2E | JS/TS state 流 |
@@ -101,183 +161,37 @@ When changing the project, read in this order:
 | Toggle Fold | Fold functions | 折叠 |
 | Fork… | fork function/file | fork |
 
+### Extension Dev / 扩展开发
+
+**EN:** Open `project/` in VS Code → F5 → Command Palette → `Lucid: Open Def-Use View`.
+
+**中文：** VS Code 打开 `project/` → F5 → `Lucid: Open Def-Use View`。
+
 ### Basic Commands / 基本命令
 
-**EN:** All npm/CLI commands below assume you are in the **`project/`** folder (where `package.json` lives), **not** the repo root `lucid/`.
+**EN:** **`project/`** in this manual means **`lucid/project/`** — Lucid's own extension package — **not** the target codebase you analyze with Lucid.
 
-**中文：** 以下命令都在 **`project/`** 目录执行（有 `package.json` 的那一层），**不是** 仓库根目录 `lucid/`。
+**中文：** 本手册里的 **`project/`** 指 **`lucid/project/`**（Lucid 扩展自身目录），**不是**你用 Lucid 分析的目标项目目录。
 
-**Prerequisites / 前置条件**
+Run from `lucid/project/`:
 
-| EN | 中文 |
-| --- | --- |
-| Node.js **18+** (`node -v`) | 已安装 Node **18+** |
-| npm (`npm -v`) | 已安装 npm |
-| First time: run `npm install` once | 首次 clone 后先 `npm install` |
-
-**Windows (PowerShell) / Windows 注意**
-
-- Use `;` to chain commands, **not** `&&` (older PowerShell rejects `&&`).
-- Paths with spaces need quotes: `"./examples/CartPanel.tsx"`.
-- If `node ./out/cli.js` fails with *Cannot find module*, run `npm run compile` first.
-
-**中文：** PowerShell 用 `;` 链接命令；路径有空格要加引号；找不到 `out/cli.js` 时先 `npm run compile`。
-
----
-
-#### First-time setup / 首次安装
-
-```powershell
-# From repo root — 从仓库根目录
-cd project
-
-# Install dependencies (once) — 安装依赖（只需一次）
-npm install
-
-# Compile TypeScript → out/ — 编译到 out/
-npm run compile
-```
-
-**Expected:** `out/cli.js` and `out/extension.js` exist.  
-**若报错 `ENOENT package.json`：** 说明当前目录不对，先 `cd project`。
-
----
-
-#### Run tests / 跑测试
-
-```powershell
-cd project
-npm test
-```
-
-**What it does:** `npm run compile` then `node ./out/test-runner.js` (15 suites).  
-**做什么：** 先编译再跑 15 个测试套件。
-
-| Symptom / 现象 | Fix / 处理 |
-| --- | --- |
-| `error TS…` during compile | Fix the TypeScript error shown; do not skip compile |
-| Tests hang on first run | Normal on cold start; wait for `Test Summary` |
-| `npm test` from repo root | `cd project` first |
-
----
-
-#### CLI analyze / CLI 分析
-
-**EN:** CLI reads **compiled** output in `out/`. After editing `src/`, run `npm run compile` (or `npm test`) before CLI.
-
-**中文：** CLI 读的是 **`out/`** 里编译后的 JS；改完 `src/` 后要先 `npm run compile`。
-
-```powershell
-cd project
-npm run compile
-
-# Analyze entire file — 分析整文件，输出 JSON 数组
-node ./out/cli.js analyze ./examples/CartPanel.tsx
-
-# Filter one state variable — 只输出一个 state
-node ./out/cli.js analyze ./examples/CartPanel.tsx --variable cartTotal
-
-# Python example — Python 示例
-node ./out/cli.js analyze ./examples/cart.py
-```
-
-**Pipe to file / 保存到文件**
-
-```powershell
-node ./out/cli.js analyze ./examples/CartPanel.tsx > contracts.json
-```
-
-| Symptom / 现象 | Fix / 处理 |
-| --- | --- |
-| `Cannot find module './out/cli.js'` | Run `npm run compile` from `project/` |
-| Empty `[]` output | File has no Lucid contracts; try another example or check syntax |
-| `--variable` returns `[]` | Variable name typo; run without `--variable` to list names |
-| Path not found | Use `./examples/...` relative to `project/`, or absolute path in quotes |
-
----
-
-#### Extension dev (F5) / 扩展调试
-
-**EN:** Open the **`project/` folder** as the VS Code workspace (File → Open Folder), not the parent `lucid/` repo root.
-
-**中文：** 用 VS Code **打开 `project/` 文件夹**，不要只打开上层 `lucid/`。
-
-1. `cd project` → `npm install` → `npm run compile`
-2. Open **`project/`** in VS Code / Cursor
-3. **Run → Start Debugging (F5)** — launches **Extension Development Host**
-4. In the new window: open `examples/CartPanel.tsx` → Command Palette → `Lucid: Open Def-Use View`
-
-**If F5 fails / F5 失败**
-
-| Symptom | Fix |
-| --- | --- |
-| No launch config | Use **Run and Debug** panel; pick **Run Extension** (`.vscode/launch.json` in `project/`) |
-| Extension commands missing | Ensure host window opened `project/examples/`, not wrong workspace |
-| `out/extension.js` missing | `npm run compile` in `project/` |
-
----
-
-#### Trace JSON (Phase 2) / Trace 自动路径
-
-**EN:** Place trace events at **`<workspace-root>/.lucid/trace.json`**. When using F5, workspace root is usually **`project/`** (the folder you opened).
-
-**中文：** 路径为 **`<工作区根>/.lucid/trace.json`**。F5 时工作区根一般是 **`project/`**。
-
-```powershell
-cd project
-New-Item -ItemType Directory -Force -Path .lucid
-@'
-[
-  {
-    "file": "D:/10_projects/lucid/project/examples/CartPanel.tsx",
-    "line": 12,
-    "kind": "use",
-    "variableName": "cartTotal"
-  }
-]
-'@ | Set-Content -Encoding utf8 .lucid/trace.json
-```
-
-**Important / 要点**
-
-- `"file"` must be the **absolute path** on your machine (adjust drive/path).
-- `"variableName"` must match the session **scopeId** (state name you picked in Def-Use).
-- Open a Def-Use VF **first**, then write/save `trace.json` — Lucid auto-reloads via chokidar.
-- Manual reload: Command Palette → **Lucid: Load Trace Overlay** (reads `.lucid/trace.json` first).
-
-**Bash (Git Bash / WSL) equivalent**
+在 `lucid/project/` 目录下运行：
 
 ```bash
-cd project
-mkdir -p .lucid
-cat > .lucid/trace.json <<'EOF'
-[
-  {
-    "file": "/d/10_projects/lucid/project/examples/CartPanel.tsx",
-    "line": 12,
-    "kind": "use",
-    "variableName": "cartTotal"
-  }
-]
-EOF
+npm install
+npm run compile
+npm test
+node ./out/cli.js analyze ./examples/CartPanel.tsx
 ```
 
----
+Filter one variable:
 
-#### C++ → assembly (external compiler) / C++ 转汇编
+按单个变量过滤：
 
-**EN:** Per DESIGN, Lucid does **not** lower C++ itself. Use your system compiler:
-
-**中文：** 按 DESIGN，Lucid **不**自研 C++ lowering，用系统编译器：
-
-```powershell
-# Requires clang or gcc in PATH — 需要 PATH 里有 clang 或 gcc
-clang -S -o cart.s ./examples/cart.cpp
-# or — 或
-g++ -S -o cart.s ./examples/cart.cpp
+```bash
+node ./out/cli.js analyze ./examples/CartPanel.tsx --variable cartTotal
 ```
 
-Lucid may link to this output in a future View; today this is a manual inspection step.
 ### Language Support / 语言支持
 
 | Language | EN | 中文 |
@@ -289,9 +203,9 @@ Lucid may link to this output in a future View; today this is a manual inspectio
 
 ### Trace JSON / Trace JSON
 
-**EN:** See **Trace JSON (Phase 2)** under Basic Commands above for paths, PowerShell/Bash examples, and field rules.
+**EN:** Write runtime events to **`.lucid/trace.json`** at workspace root. Lucid **auto-watches** this file (chokidar) and merges `observed` spans into open trace-capable sessions. Command **Load Trace Overlay** reloads from the same path, or opens a file picker if missing.
 
-**中文：** 路径、示例命令、字段规则见上文 **Basic Commands → Trace JSON (Phase 2)**。
+**中文：** 运行时事件写入工作区 **`.lucid/trace.json`**。Lucid **自动监听**并合并到已打开的 session。**Load Trace Overlay** 优先读该路径，不存在时再选手动 JSON。
 
 Array format / 数组格式: `{ "file", "line", "kind": "use"|"write"|"trigger", "variableName", "column?", "event?" }`. Matching spans → `provenance: "observed"` and `[observed]` in VF.
 

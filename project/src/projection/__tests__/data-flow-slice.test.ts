@@ -4,6 +4,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { createTempDir, removeTempDir } from '../../__tests__/temp-dir';
 import { buildDataFlowSlice, listPythonDataNames } from '../data-flow-slice';
 import { graphFromDataFlowSlice } from '../graph';
 import { layoutDataFlowDocument } from '../../virtual/layout';
@@ -12,10 +13,10 @@ import { pushOverlay } from '../../virtual/push';
 import { inferPythonDataType } from '../../analysis/data-type';
 import { buildPythonContracts } from '../../analysis/python-contract';
 
-const FIX = path.join(__dirname, 'fixtures');
+let FIX = '';
 
 function setup() {
-  fs.mkdirSync(FIX, { recursive: true });
+  FIX = createTempDir('data-flow');
   fs.writeFileSync(
     path.join(FIX, 'flow.py'),
     `cart_total: int = 0
@@ -33,9 +34,8 @@ label = "cart"
 }
 
 function cleanup() {
-  if (fs.existsSync(FIX)) {
-    fs.rmSync(FIX, { recursive: true, force: true });
-  }
+  removeTempDir(FIX);
+  FIX = '';
 }
 
 export function runTests(): boolean {

@@ -39,14 +39,13 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.runTests = runTests;
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
+const temp_dir_1 = require("../../__tests__/temp-dir");
 const def_use_slice_1 = require("../def-use-slice");
 const contract_1 = require("../../analysis/contract");
 const span_1 = require("../../analysis/span");
-const TEST_DIR = path.join(__dirname, 'fixtures');
+let TEST_DIR = '';
 function setup() {
-    if (!fs.existsSync(TEST_DIR)) {
-        fs.mkdirSync(TEST_DIR, { recursive: true });
-    }
+    TEST_DIR = (0, temp_dir_1.createTempDir)('projection-slice');
     const src = `
 import { useState } from 'react';
 function Component() {
@@ -61,9 +60,8 @@ function Component() {
     fs.writeFileSync(path.join(TEST_DIR, 'slice.tsx'), src);
 }
 function cleanup() {
-    if (fs.existsSync(TEST_DIR)) {
-        fs.rmSync(TEST_DIR, { recursive: true, force: true });
-    }
+    (0, temp_dir_1.removeTempDir)(TEST_DIR);
+    TEST_DIR = '';
 }
 function runTests() {
     console.log('Running Projection Slice Tests...\n');

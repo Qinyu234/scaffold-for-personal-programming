@@ -4,15 +4,16 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { createTempDir, removeTempDir } from '../../__tests__/temp-dir';
 import { buildStructureSlice } from '../structure-slice';
 import { graphFromStructureSlice } from '../graph';
 import { layoutStructureDocument } from '../../virtual/layout';
 import { createStructureSession } from '../../virtual/session';
 
-const FIX = path.join(__dirname, 'fixtures');
+let FIX = '';
 
 function setup() {
-  fs.mkdirSync(FIX, { recursive: true });
+  FIX = createTempDir('structure');
   fs.writeFileSync(
     path.join(FIX, 'module.tsx'),
     `import { useState } from 'react';
@@ -35,9 +36,8 @@ total = 0
 }
 
 function cleanup() {
-  if (fs.existsSync(FIX)) {
-    fs.rmSync(FIX, { recursive: true, force: true });
-  }
+  removeTempDir(FIX);
+  FIX = '';
 }
 
 export function runTests(): boolean {

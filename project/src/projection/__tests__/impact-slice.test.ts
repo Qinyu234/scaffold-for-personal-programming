@@ -4,16 +4,17 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { createTempDir, removeTempDir } from '../../__tests__/temp-dir';
 import { buildImpactSlice, listImpactStates } from '../impact-slice';
 import { graphFromImpactSlice } from '../graph';
 import { layoutImpactDocument } from '../../virtual/layout';
 import { createImpactSession } from '../../virtual/session';
 import { pushOverlay } from '../../virtual/push';
 
-const FIX = path.join(__dirname, 'fixtures');
+let FIX = '';
 
 function setup() {
-  fs.mkdirSync(FIX, { recursive: true });
+  FIX = createTempDir('impact');
   fs.writeFileSync(
     path.join(FIX, 'impact.tsx'),
     `import { useState } from 'react';
@@ -29,9 +30,8 @@ export function Panel() {
 }
 
 function cleanup() {
-  if (fs.existsSync(FIX)) {
-    fs.rmSync(FIX, { recursive: true, force: true });
-  }
+  removeTempDir(FIX);
+  FIX = '';
 }
 
 export function runTests(): boolean {

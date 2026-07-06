@@ -39,14 +39,16 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.runTests = runTests;
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
+const temp_dir_1 = require("./temp-dir");
 const trace_session_1 = require("../virtual/trace-session");
 const trace_apply_1 = require("../virtual/trace-apply");
 const lucid_paths_1 = require("../extension/lucid-paths");
 const session_1 = require("../virtual/session");
 const translation_1 = require("../virtual/translation");
 const session_store_1 = require("../extension/session-store");
-const FIX = path.join(__dirname, 'fixtures');
+let FIX = '';
 function setup() {
+    FIX = (0, temp_dir_1.createTempDir)('phase2-ui');
     fs.mkdirSync(path.join(FIX, 'shared'), { recursive: true });
     fs.writeFileSync(path.join(FIX, 'tsconfig.json'), JSON.stringify({
         compilerOptions: { target: 'ES2020', module: 'ESNext', strict: false, moduleResolution: 'node' },
@@ -60,9 +62,8 @@ export function run() { inc(); console.log(total); }
 `);
 }
 function cleanup() {
-    if (fs.existsSync(FIX)) {
-        fs.rmSync(FIX, { recursive: true, force: true });
-    }
+    (0, temp_dir_1.removeTempDir)(FIX);
+    FIX = '';
 }
 function runTests() {
     console.log('Running Phase 2 UI Tests...\n');

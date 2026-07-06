@@ -4,16 +4,15 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { createTempDir, removeTempDir } from '../../__tests__/temp-dir';
 import { buildDefUseSlice, contractToSpans } from '../def-use-slice';
 import { buildContracts } from '../../analysis/contract';
 import { isValidSpan } from '../../analysis/span';
 
-const TEST_DIR = path.join(__dirname, 'fixtures');
+let TEST_DIR = '';
 
 function setup() {
-  if (!fs.existsSync(TEST_DIR)) {
-    fs.mkdirSync(TEST_DIR, { recursive: true });
-  }
+  TEST_DIR = createTempDir('projection-slice');
   const src = `
 import { useState } from 'react';
 function Component() {
@@ -29,9 +28,8 @@ function Component() {
 }
 
 function cleanup() {
-  if (fs.existsSync(TEST_DIR)) {
-    fs.rmSync(TEST_DIR, { recursive: true, force: true });
-  }
+  removeTempDir(TEST_DIR);
+  TEST_DIR = '';
 }
 
 export function runTests(): boolean {

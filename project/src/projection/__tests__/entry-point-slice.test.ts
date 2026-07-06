@@ -4,16 +4,17 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { createTempDir, removeTempDir } from '../../__tests__/temp-dir';
 import { buildEntryPointSlice, listEntryPointFunctions } from '../entry-point-slice';
 import { graphFromEntryPointSlice } from '../graph';
 import { layoutEntryPointDocument } from '../../virtual/layout';
 import { createEntryPointSession } from '../../virtual/session';
 import { pushOverlay } from '../../virtual/push';
 
-const FIX = path.join(__dirname, 'fixtures');
+let FIX = '';
 
 function setup() {
-  fs.mkdirSync(FIX, { recursive: true });
+  FIX = createTempDir('entry-point');
   fs.writeFileSync(
     path.join(FIX, 'entry.tsx'),
     `export function CartPanel() {
@@ -37,9 +38,8 @@ function setup() {
 }
 
 function cleanup() {
-  if (fs.existsSync(FIX)) {
-    fs.rmSync(FIX, { recursive: true, force: true });
-  }
+  removeTempDir(FIX);
+  FIX = '';
 }
 
 export function runTests(): boolean {

@@ -4,6 +4,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { createTempDir, removeTempDir } from './temp-dir';
 import { parseTraceEventsJson, applyTraceEvents } from '../virtual/trace-session';
 import { applyTraceToSession } from '../virtual/trace-apply';
 import { traceJsonPath } from '../extension/lucid-paths';
@@ -11,9 +12,10 @@ import { createDefUseSession, pullSession, relayoutSession } from '../virtual/se
 import { createTranslationSession } from '../virtual/translation';
 import { sessionKey, putSession, getSession } from '../extension/session-store';
 
-const FIX = path.join(__dirname, 'fixtures');
+let FIX = '';
 
 function setup() {
+  FIX = createTempDir('phase2-ui');
   fs.mkdirSync(path.join(FIX, 'shared'), { recursive: true });
   fs.writeFileSync(
     path.join(FIX, 'tsconfig.json'),
@@ -41,9 +43,8 @@ export function run() { inc(); console.log(total); }
 }
 
 function cleanup() {
-  if (fs.existsSync(FIX)) {
-    fs.rmSync(FIX, { recursive: true, force: true });
-  }
+  removeTempDir(FIX);
+  FIX = '';
 }
 
 export function runTests(): boolean {

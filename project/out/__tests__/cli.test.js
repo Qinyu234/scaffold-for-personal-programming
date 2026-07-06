@@ -37,12 +37,11 @@ exports.runTests = runTests;
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const child_process_1 = require("child_process");
+const temp_dir_1 = require("./temp-dir");
 const contract_1 = require("../analysis/contract");
-const TEST_DIR = path.join(__dirname, 'fixtures');
+let TEST_DIR = '';
 function setupTestFiles() {
-    if (!fs.existsSync(TEST_DIR)) {
-        fs.mkdirSync(TEST_DIR, { recursive: true });
-    }
+    TEST_DIR = (0, temp_dir_1.createTempDir)('cli');
     // React component with multiple states and triggers
     const reactCode = `
 import { useState } from 'react';
@@ -72,9 +71,8 @@ export function Cart() {
     fs.writeFileSync(path.join(TEST_DIR, 'Cart.tsx'), reactCode);
 }
 function cleanupTestFiles() {
-    if (fs.existsSync(TEST_DIR)) {
-        fs.rmSync(TEST_DIR, { recursive: true, force: true });
-    }
+    (0, temp_dir_1.removeTempDir)(TEST_DIR);
+    TEST_DIR = '';
 }
 function runTests() {
     console.log('Running CLI & Trigger Analysis Tests...\n');

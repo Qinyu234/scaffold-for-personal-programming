@@ -9,16 +9,13 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { createTempDir, removeTempDir } from '../../__tests__/temp-dir';
 import { buildContracts } from '../contract';
 
-// Test file paths
-const TEST_DIR = path.join(__dirname, 'fixtures');
-
+let TEST_DIR = '';
 
 function setupTestFiles() {
-  if (!fs.existsSync(TEST_DIR)) {
-    fs.mkdirSync(TEST_DIR, { recursive: true });
-  }
+  TEST_DIR = createTempDir('contract');
 
   // File with state variable
   const stateFile = `
@@ -79,9 +76,8 @@ void bump() {
 }
 
 function cleanupTestFiles() {
-  if (fs.existsSync(TEST_DIR)) {
-    fs.rmSync(TEST_DIR, { recursive: true, force: true });
-  }
+  removeTempDir(TEST_DIR);
+  TEST_DIR = '';
 }
 
 function runTests() {

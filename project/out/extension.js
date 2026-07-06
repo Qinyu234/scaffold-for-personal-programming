@@ -61,6 +61,8 @@ const fork_1 = require("./virtual/fork");
 const fold_store_1 = require("./virtual/fold-store");
 const lucid_fs_1 = require("./extension/lucid-fs");
 const graph_panel_1 = require("./extension/graph-panel");
+const lens_picker_1 = require("./extension/lens-picker");
+const structure_slice_1 = require("./projection/structure-slice");
 const session_store_2 = require("./extension/session-store");
 let extContext;
 let activeUri;
@@ -115,9 +117,52 @@ async function openVirtualDocument(uri) {
     const doc = await vscode.workspace.openTextDocument(vscode.Uri.parse(uri));
     await vscode.window.showTextDocument(doc, { preview: false });
 }
+function moduleNodeIdFromSession(session) {
+    const slice = session.slice;
+    return (0, structure_slice_1.moduleNodeId)(slice.moduleName);
+}
+async function openLucidCluster(filePath) {
+    if (!(0, language_1.isSupportedSourceFile)(filePath)) {
+        void vscode.window.showWarningMessage('Lucid: open a supported source file first.');
+        return;
+    }
+    await startStructure(filePath);
+}
+function lensHandlers() {
+    return {
+        startDefUse,
+        startEntryPoint,
+        startEventFlow,
+        startImpact,
+        startDataFlow,
+    };
+}
 function handleGraphMessage(uri) {
     return async (msg) => {
         const m = msg;
+        const session = (0, session_store_2.getSession)(uri);
+        if (session?.viewType === 'structure') {
+            if (m.type === 'setCollapseLevel' && typeof m.collapseLevel === 'number') {
+                const level = Math.max(0, Math.min(3, m.collapseLevel));
+                (0, session_store_2.putSession)({ ...session, collapseLevel: level });
+                return;
+            }
+            if (m.type === 'drillIn') {
+                const nodeId = m.nodeId ?? moduleNodeIdFromSession(session);
+                if (!nodeId) {
+                    void vscode.window.showWarningMessage('Lucid: select a node in the cluster graph first.');
+                    return;
+                }
+                const slice = session.slice;
+                const targetPath = (0, structure_slice_1.filePathForStructureNode)(nodeId, slice);
+                if (!targetPath) {
+                    void vscode.window.showWarningMessage('Lucid: external or unresolved dependency — open the package in the editor manually.');
+                    return;
+                }
+                await (0, lens_picker_1.runSemanticLensPicker)(targetPath, lensHandlers());
+                return;
+            }
+        }
         if (m.type === 'openDocument') {
             await openVirtualDocument(uri);
             return;
@@ -194,7 +239,7 @@ async function startStructure(filePath) {
     }
     const uri = (0, session_store_2.putSession)(session);
     activeUri = uri;
-    const spec = (0, graph_1.graphFromStructureSlice)(session.slice);
+    const spec = (0, graph_1.graphFromStructureSlice)(session.slice, session.collapseLevel ?? 0);
     graph_panel_1.GraphPanel.show(extContext, spec, handleGraphMessage(uri));
     await openVirtualDocument(uri);
 }
@@ -276,7 +321,14 @@ function activate(context) {
     });
     const fsProvider = new lucid_fs_1.LucidFileSystemProvider();
     context.subscriptions.push(vscode.workspace.registerFileSystemProvider('lucid', fsProvider, { isCaseSensitive: true }));
-    context.subscriptions.push(vscode.commands.registerCommand('lucid.openDefUse', async () => {
+    context.subscriptions.push(vscode.commands.registerCommand('lucid.open', async () => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) {
+            void vscode.window.showWarningMessage('Lucid: no active editor.');
+            return;
+        }
+        await openLucidCluster(editor.document.uri.fsPath);
+    }), vscode.commands.registerCommand('lucid.openDefUse', async () => {
         const editor = vscode.window.activeTextEditor;
         if (!editor) {
             void vscode.window.showWarningMessage('Lucid: no active editor.');
@@ -410,12 +462,7 @@ function activate(context) {
             void vscode.window.showWarningMessage('Lucid: no active editor.');
             return;
         }
-        const filePath = editor.document.uri.fsPath;
-        if (!(0, language_1.isSupportedSourceFile)(filePath)) {
-            void vscode.window.showWarningMessage('Lucid: Structure View requires a supported source file.');
-            return;
-        }
-        await startStructure(filePath);
+        await openLucidCluster(editor.document.uri.fsPath);
     }), vscode.commands.registerCommand('lucid.openImpact', async () => {
         const editor = vscode.window.activeTextEditor;
         if (!editor) {
@@ -438,6 +485,17 @@ function activate(context) {
             await startImpact(filePath, stateName);
         }
     }), vscode.commands.registerCommand('lucid.analyzeState', () => vscode.commands.executeCommand('lucid.openDefUse')), vscode.commands.registerCommand('lucid.openView', async () => {
+        const tier = await vscode.window.showQuickPick([
+            { label: 'Cluster from active file (default)', id: 'cluster' },
+            { label: 'Semantic lens (direct)', id: 'semantic' },
+        ], { title: 'Lucid' });
+        if (!tier) {
+            return;
+        }
+        if (tier.id === 'cluster') {
+            await vscode.commands.executeCommand('lucid.open');
+            return;
+        }
         const viewType = await vscode.window.showQuickPick(['def-use', 'entry-point', 'impact', 'structure', 'event-flow', 'data-flow'], { title: 'Lucid view' });
         if (!viewType) {
             return;

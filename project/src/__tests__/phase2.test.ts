@@ -4,6 +4,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { createTempDir, removeTempDir } from './temp-dir';
 import { buildDefUseSliceWorkspace } from '../projection/def-use-slice';
 import { layoutDefUseDocument } from '../virtual/layout';
 import { mergeTraceOverlay } from '../analysis/trace-overlay';
@@ -12,9 +13,10 @@ import { pushOverlay } from '../virtual/push';
 import { createDefUseSession } from '../virtual/session';
 import { SourceSpan } from '../analysis/span';
 
-const FIX = path.join(__dirname, 'fixtures');
+let FIX = '';
 
 function setupCrossFile() {
+  FIX = createTempDir('phase2');
   fs.mkdirSync(path.join(FIX, 'shared'), { recursive: true });
   fs.writeFileSync(
     path.join(FIX, 'tsconfig.json'),
@@ -48,9 +50,8 @@ export function run() {
 }
 
 function cleanup() {
-  if (fs.existsSync(FIX)) {
-    fs.rmSync(FIX, { recursive: true, force: true });
-  }
+  removeTempDir(FIX);
+  FIX = '';
 }
 
 export function runTests(): boolean {

@@ -39,14 +39,16 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.runTests = runTests;
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
+const temp_dir_1 = require("./temp-dir");
 const def_use_slice_1 = require("../projection/def-use-slice");
 const layout_1 = require("../virtual/layout");
 const trace_overlay_1 = require("../analysis/trace-overlay");
 const translation_1 = require("../virtual/translation");
 const push_1 = require("../virtual/push");
 const session_1 = require("../virtual/session");
-const FIX = path.join(__dirname, 'fixtures');
+let FIX = '';
 function setupCrossFile() {
+    FIX = (0, temp_dir_1.createTempDir)('phase2');
     fs.mkdirSync(path.join(FIX, 'shared'), { recursive: true });
     fs.writeFileSync(path.join(FIX, 'tsconfig.json'), JSON.stringify({
         compilerOptions: { target: 'ES2020', module: 'ESNext', strict: false, moduleResolution: 'node' },
@@ -66,9 +68,8 @@ export function run() {
 `);
 }
 function cleanup() {
-    if (fs.existsSync(FIX)) {
-        fs.rmSync(FIX, { recursive: true, force: true });
-    }
+    (0, temp_dir_1.removeTempDir)(FIX);
+    FIX = '';
 }
 function runTests() {
     console.log('Running Phase 2 Tests...\n');

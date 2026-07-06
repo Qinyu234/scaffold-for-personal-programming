@@ -2,6 +2,7 @@
  * Cytoscape graph spec from Lucid IR / Projection Slice.
  */
 
+import * as path from 'path';
 import { Contract } from '../analysis/contract';
 import { contractToSpans, ProjectionSlice } from './def-use-slice';
 import {
@@ -24,6 +25,9 @@ export interface GraphNode {
   id: string;
   label: string;
   kind: 'state' | 'write' | 'use' | 'trigger' | 'function' | 'module' | 'data' | 'import';
+  /** Tier-1 cluster: absolute path when node maps to a workspace file. */
+  filePath?: string;
+  hop?: number;
 }
 
 export interface GraphEdge {
@@ -39,6 +43,9 @@ export interface GraphSpec {
   nodes: GraphNode[];
   edges: GraphEdge[];
   layout?: 'breadthfirst' | 'dagre';
+  /** Tier-1 aggregation: 0 = full detail … 3 = focal only (+ count). */
+  collapseLevel?: number;
+  tier?: 'aggregation' | 'semantic';
 }
 
 export function graphFromEntryPointSlice(slice: EntryPointSlice): GraphSpec {
@@ -147,16 +154,31 @@ export function graphFromImpactSlice(slice: ImpactSlice): GraphSpec {
   return { viewType: 'impact', scopeId: slice.scopeId, nodes, edges, layout: 'breadthfirst' };
 }
 
-export function graphFromStructureSlice(slice: StructureSlice): GraphSpec {
+export function graphFromStructureSlice(slice: StructureSlice, collapseLevel = 0): GraphSpec {
   const nodes: GraphNode[] = [];
   const edges: GraphEdge[] = [];
   const modId = moduleNodeId(slice.moduleName);
-  nodes.push({ id: modId, label: slice.moduleName, kind: 'module' });
+  nodes.push({
+    id: modId,
+    label: slice.moduleName,
+    kind: 'module',
+    filePath: slice.focalFilePath,
+    hop: 0,
+  });
 
-  for (const span of slice.spans) {
-    const dep = depNodeId(span.variableName ?? 'unknown');
+  for (const member of slice.members) {
+    const dep = depNodeId(member.specifier);
     if (!nodes.find(n => n.id === dep)) {
-      nodes.push({ id: dep, label: span.variableName ?? 'dep', kind: 'module' });
+      const baseLabel = member.filePath
+        ? path.basename(member.filePath)
+        : member.specifier;
+      nodes.push({
+        id: dep,
+        label: baseLabel,
+        kind: member.filePath ? 'module' : 'import',
+        filePath: member.filePath ?? undefined,
+        hop: member.hop,
+      });
     }
   }
 
@@ -169,7 +191,15 @@ export function graphFromStructureSlice(slice: StructureSlice): GraphSpec {
     });
   }
 
-  return { viewType: 'structure', scopeId: slice.scopeId, nodes, edges, layout: 'breadthfirst' };
+  return {
+    viewType: 'structure',
+    scopeId: slice.scopeId,
+    nodes,
+    edges,
+    layout: 'breadthfirst',
+    collapseLevel,
+    tier: 'aggregation',
+  };
 }
 
 export function graphFromDataFlowSlice(slice: DataFlowSlice): GraphSpec {

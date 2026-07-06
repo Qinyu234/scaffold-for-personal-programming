@@ -9,6 +9,7 @@ import { Project } from 'ts-morph';
 import { SourceSpan } from '../analysis/span';
 import { ProjectionSlice } from './def-use-slice';
 import { detectLanguage } from '../ingestion/language';
+import { resolveImportPath } from './import-resolve';
 
 export interface ImportEdge {
   source: string;
@@ -16,9 +17,18 @@ export interface ImportEdge {
   label: string;
 }
 
+/** One import edge in the focal file's dependency cluster (tier-1 aggregation). */
+export interface ClusterMember {
+  specifier: string;
+  filePath: string | null;
+  hop: number;
+}
+
 export interface StructureSlice extends ProjectionSlice {
   viewType: 'structure';
   moduleName: string;
+  focalFilePath: string;
+  members: ClusterMember[];
   edges: ImportEdge[];
 }
 
@@ -28,16 +38,19 @@ function moduleStem(filePath: string): string {
   return path.basename(filePath, path.extname(filePath));
 }
 
-function buildJsImports(filePath: string, moduleName: string): { spans: SourceSpan[]; edges: ImportEdge[] } {
+function buildJsImports(filePath: string, moduleName: string): { spans: SourceSpan[]; edges: ImportEdge[]; members: ClusterMember[] } {
   const project = new Project({ compilerOptions: { allowJs: true } });
   const sourceFile = project.addSourceFileAtPath(filePath);
   const spans: SourceSpan[] = [];
   const edges: ImportEdge[] = [];
+  const members: ClusterMember[] = [];
   const modId = `mod:${moduleName}`;
 
   for (const imp of sourceFile.getImportDeclarations()) {
     const specifier = imp.getModuleSpecifierValue();
     const line = imp.getStartLineNumber();
+    const resolved = resolveImportPath(filePath, specifier);
+    members.push({ specifier, filePath: resolved, hop: 1 });
     spans.push({
       file: filePath,
       line,
@@ -48,18 +61,19 @@ function buildJsImports(filePath: string, moduleName: string): { spans: SourceSp
     });
     edges.push({
       source: modId,
-      target: `dep:${specifier}`,
+      target: depNodeId(specifier),
       label: 'imports',
     });
   }
 
-  return { spans, edges };
+  return { spans, edges, members };
 }
 
-function buildPythonImports(filePath: string, moduleName: string): { spans: SourceSpan[]; edges: ImportEdge[] } {
+function buildPythonImports(filePath: string, moduleName: string): { spans: SourceSpan[]; edges: ImportEdge[]; members: ClusterMember[] } {
   const lines = fs.readFileSync(filePath, 'utf8').split(/\r?\n/);
   const spans: SourceSpan[] = [];
   const edges: ImportEdge[] = [];
+  const members: ClusterMember[] = [];
   const modId = `mod:${moduleName}`;
 
   lines.forEach((raw, index) => {
@@ -69,6 +83,8 @@ function buildPythonImports(filePath: string, moduleName: string): { spans: Sour
     }
     const specifier = match[1] ?? match[2];
     const line = index + 1;
+    const resolved = resolveImportPath(filePath, specifier.replace(/\./g, '/'));
+    members.push({ specifier, filePath: resolved, hop: 1 });
     spans.push({
       file: filePath,
       line,
@@ -79,12 +95,12 @@ function buildPythonImports(filePath: string, moduleName: string): { spans: Sour
     });
     edges.push({
       source: modId,
-      target: `dep:${specifier}`,
+      target: depNodeId(specifier),
       label: 'imports',
     });
   });
 
-  return { spans, edges };
+  return { spans, edges, members };
 }
 
 export function buildStructureSlice(filePath: string): StructureSlice | null {
@@ -101,9 +117,22 @@ export function buildStructureSlice(filePath: string): StructureSlice | null {
     viewType: 'structure',
     scopeId: moduleName,
     moduleName,
+    focalFilePath: path.resolve(filePath),
+    members: built.members,
     spans: built.spans,
     edges: built.edges,
   };
+}
+
+export function filePathForStructureNode(nodeId: string, slice: StructureSlice): string | null {
+  if (nodeId === moduleNodeId(slice.moduleName)) {
+    return slice.focalFilePath;
+  }
+  if (!nodeId.startsWith('dep:')) {
+    return null;
+  }
+  const specifier = nodeId.slice(4);
+  return slice.members.find(m => m.specifier === specifier)?.filePath ?? null;
 }
 
 export function moduleNodeId(moduleName: string): string {

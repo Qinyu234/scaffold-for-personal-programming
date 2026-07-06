@@ -44,13 +44,11 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.runTests = runTests;
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
+const temp_dir_1 = require("../../__tests__/temp-dir");
 const contract_1 = require("../contract");
-// Test file paths
-const TEST_DIR = path.join(__dirname, 'fixtures');
+let TEST_DIR = '';
 function setupTestFiles() {
-    if (!fs.existsSync(TEST_DIR)) {
-        fs.mkdirSync(TEST_DIR, { recursive: true });
-    }
+    TEST_DIR = (0, temp_dir_1.createTempDir)('contract');
     // File with state variable
     const stateFile = `
 import { useState } from 'react';
@@ -105,9 +103,8 @@ void bump() {
     fs.writeFileSync(path.join(TEST_DIR, 'state.cpp'), cppState);
 }
 function cleanupTestFiles() {
-    if (fs.existsSync(TEST_DIR)) {
-        fs.rmSync(TEST_DIR, { recursive: true, force: true });
-    }
+    (0, temp_dir_1.removeTempDir)(TEST_DIR);
+    TEST_DIR = '';
 }
 function runTests() {
     console.log('Running Task 1.5 Tests...\n');

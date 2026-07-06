@@ -11,6 +11,7 @@ import { runTests as runCliTests } from './__tests__/cli.test';
 import { runTests as runProjectionSliceTests } from './projection/__tests__/projection-slice.test';
 import { runTests as runVirtualTests } from './virtual/__tests__/virtual.test';
 import { runTests as runStructureTests } from './projection/__tests__/structure-slice.test';
+import { runTests as runImportResolveTests } from './projection/__tests__/import-resolve.test';
 import { runTests as runImpactTests } from './projection/__tests__/impact-slice.test';
 import { runTests as runEventFlowTests } from './projection/__tests__/event-flow-slice.test';
 import { runTests as runEntryPointTests } from './projection/__tests__/entry-point-slice.test';
@@ -37,6 +38,7 @@ async function main() {
     { name: 'Projection: Event Flow Slice Tests', fn: runEventFlowTests },
     { name: 'Projection: Impact Slice Tests', fn: runImpactTests },
     { name: 'Projection: Structure Slice Tests', fn: runStructureTests },
+    { name: 'Projection: Import Resolve / Cluster Tests', fn: runImportResolveTests },
     { name: 'Phase 2: Cross-File Trace Translation Tests', fn: runPhase2Tests },
     { name: 'Phase 2: Extension UI Wiring Tests', fn: runPhase2UiTests },
   ];

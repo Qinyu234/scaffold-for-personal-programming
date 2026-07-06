@@ -41,6 +41,8 @@ export interface VirtualSession {
   collapsedFunctions: Set<string>;
   selectedSegmentIds: Set<string>;
   lineage: Lineage;
+  /** Tier-1 aggregation graph density (0–3). Semantic lenses ignore. */
+  collapseLevel?: number;
   /** Phase 2: runtime trace events merged into slice on pull/layout. */
   traceEvents?: import('../analysis/trace-overlay').TraceEvent[];
 }

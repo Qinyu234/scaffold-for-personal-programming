@@ -39,14 +39,15 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.runTests = runTests;
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
+const temp_dir_1 = require("../../__tests__/temp-dir");
 const event_flow_slice_1 = require("../event-flow-slice");
 const graph_1 = require("../graph");
 const layout_1 = require("../../virtual/layout");
 const session_1 = require("../../virtual/session");
 const push_1 = require("../../virtual/push");
-const FIX = path.join(__dirname, 'fixtures');
+let FIX = '';
 function setup() {
-    fs.mkdirSync(FIX, { recursive: true });
+    FIX = (0, temp_dir_1.createTempDir)('event-flow');
     fs.writeFileSync(path.join(FIX, 'events.tsx'), `import { useState } from 'react';
 
 export function Cart() {
@@ -66,9 +67,8 @@ export function Cart() {
 `);
 }
 function cleanup() {
-    if (fs.existsSync(FIX)) {
-        fs.rmSync(FIX, { recursive: true, force: true });
-    }
+    (0, temp_dir_1.removeTempDir)(FIX);
+    FIX = '';
 }
 function runTests() {
     console.log('Running Event Flow Slice Tests...\n');
